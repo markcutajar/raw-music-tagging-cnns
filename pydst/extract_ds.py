@@ -79,10 +79,11 @@ def extract_data(mp3_filenames, root):
     """
     data = []
     # Extract mp3 files and convert to numpy arrays
-    for mp3_filename in mp3_filenames:
+    for idx, mp3_filename in enumerate(mp3_filenames):
         filename =  root + "mp3_files/" + mp3_filename
         song = AudioSegment.from_mp3(filename).get_array_of_samples().tolist()
         data.append(song)
+        np.save(root + "tracks/" + str(idx) + ".npy", song)
     data = np.asarray(data)
 
     # Confirm the sizes are as they need to be
@@ -90,7 +91,8 @@ def extract_data(mp3_filenames, root):
         err_str = "mp3_filenames {} size not equal to extracted data size {}!".format(len(mp3_filenames), data.shape[0])
         logger.error(err_str)
         raise ValueError(err_str)
-    
+
+
     return data
 
 
