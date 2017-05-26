@@ -67,7 +67,7 @@ def extract_tags_names(root):
     return label_map, mp3_files, targets, tids
 
 
-def extract_data(mp3_filenames, root):
+def extract_data(mp3_filenames, root, down_sample_factor):
     """Find each mp3_file from the folder and converts
         the mp3 file into numpy array.
     
@@ -83,6 +83,7 @@ def extract_data(mp3_filenames, root):
         filename =  root + "mp3_files/" + mp3_filename
         song = AudioSegment.from_mp3(filename).get_array_of_samples().tolist()
         data.append(song)
+        song = song[::down_sample_factor]
         np.save(root + "tracks/" + str(idx) + ".npy", song)
     data = np.asarray(data)
 
@@ -206,7 +207,7 @@ def get_dataset(rng, root, divisions, _size_of = -1):
     logger.info("Shuffled targets, mp3 files and tids")
 
     # Extract data from mp3 files
-    data = extract_data(mp3_files, root)
+    data = extract_data(mp3_files, root, down_sample_factor=3)
     logger.info("Data extracted from mp3 files")
 
     if len(divisions) != 3:
