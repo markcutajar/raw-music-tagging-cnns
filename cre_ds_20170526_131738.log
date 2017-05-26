@@ -1,6 +1,0 @@
-INFO:2017-05-26 14:17:40,590:__main__:Extracted tags and names into arrays
-INFO:2017-05-26 14:17:40,590:__main__:Label_map 188, mp3_files 25863, targets (25863, 188), tids (25863,)
-INFO:2017-05-26 14:17:40,590:__main__:Number of samples reduced
-INFO:2017-05-26 14:17:40,598:__main__:Tags sorted according to frequency
-INFO:2017-05-26 14:17:40,601:__main__:Shuffled targets, mp3 files and tids
-INFO:2017-05-26 14:17:44,146:__main__:Data extracted from mp3 files

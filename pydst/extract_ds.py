@@ -10,15 +10,13 @@ import logging
 import numpy as np
 from pydst import DEFAULT_SEED
 from pydub import AudioSegment
+import pydub
 from time import gmtime, strftime
-
-# TODO: DRAW HOW DATA IS FLOWING THOUGHT THE FUNCTIONS
-# TODO: CREATE A MOCK DATASET AND TEST IE CREATE A TEST DRIVEN FUNCTION
 
 # Define logger, formatter and handler
 LOGGER_FORMAT = '%(levelname)s:%(asctime)s:%(name)s:%(message)s'
 TIME = strftime("%Y%m%d_%H%M%S", gmtime())
-LOG_FILENAME = 'cre_ds_'+TIME+'.log'
+LOG_FILENAME = 'logs/ext_ds_'+TIME+'.log'
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -32,13 +30,13 @@ logger.addHandler(stream_handler)
 
 
 def extract_tags_names(root):
-    """Extract the targets, mp3_fules, tids and label_map
+    """Extract the targets, mp3_files, tids and label_map
     
     :param root: the root folder where the files of the
         magnatagatune dataset is found.
-    :returns: targets, mp3_files, tids, label_map 
+    :returns: targets, mp3_files, tids, targets_to_labels 
     """
-    targets, mp3_files, tids, label_map = [], [], [], []
+    targets, mp3_files, tids, targets_to_labels = [], [], [], []
 
     # Open file and store the information in the appropriate lists
     filename = root + 'annotations_final.csv'
@@ -48,8 +46,8 @@ def extract_tags_names(root):
 
                 for idx, row in enumerate(annotations_file):
                     if idx == 0:
-                        label_map = row
-                        del(label_map[0], label_map[-1])
+                        targets_to_labels = row
+                        del(targets_to_labels[0], targets_to_labels[-1])
                     else:
 
                         tids.append(row[0])
@@ -63,76 +61,14 @@ def extract_tags_names(root):
     targets = np.asarray(targets)
     tids = np.asarray(tids)
     mp3_files = np.asarray(mp3_files)
-    label_map = np.asarray(label_map)
-    return label_map, mp3_files, targets, tids
-
-
-def extract_data(mp3_filenames, root, down_sample_factor):
-    """Find each mp3_file from the folder and converts
-        the mp3 file into numpy array.
-    
-    :param mp3_filenames: The name of the mp3 files to 
-        be extracted.
-    :param root: The folder where the magnatagatune 
-        dataset is found.
-    :return: data: Extracted mp3 files in numpy arrays.    
-    """
-    data = []
-    # Extract mp3 files and convert to numpy arrays
-    for idx, mp3_filename in enumerate(mp3_filenames):
-        filename =  root + "mp3_files/" + mp3_filename
-        song = AudioSegment.from_mp3(filename).get_array_of_samples().tolist()
-        data.append(song)
-        song = song[::down_sample_factor]
-        np.save(root + "tracks/" + str(idx) + ".npy", song)
-    data = np.asarray(data)
-
-    # Confirm the sizes are as they need to be
-    if len(mp3_filenames) != data.shape[0]:
-        err_str = "mp3_filenames {} size not equal to extracted data size {}!".format(len(mp3_filenames), data.shape[0])
-        logger.error(err_str)
-        raise ValueError(err_str)
-
-
-    return data
-
-
-def sort_tags(targets, labels):
-    """Function to sort the targets and labels according
-        to frequency.
-        
-    :param targets: The targets of the labels to be sorted. 
-    :param labels: The labels of the targets.
-    :return: target: Sorted targets and labels.
-    :return: labels: Sorted labels according to frequency
-        of the targets.
-    """
-    sum_of_targets = np.sum(targets, axis=0)
-    indices = np.flipud(np.argsort(sum_of_targets))
-    sorted_targets = targets[:, indices]
-    sorted_labels = labels[indices]
-    return sorted_targets, sorted_labels
-
-
-def reduction_samples(targets, mp3_files, tids, keep_rows):
-    """Reduction of the number of files to be searched.
-    
-    :param targets
-    :param mp3_files
-    :param tids
-    :param keep_rows 
-    :returns targets, mp3_files, tids, keep_rows
-    """
-    mp3_files = mp3_files[0:keep_rows]
-    targets = targets[0:keep_rows]
-    tids = tids[0:keep_rows]
-    return targets, mp3_files, tids
+    targets_to_labels = np.asarray(targets_to_labels)
+    return targets, mp3_files, tids, targets_to_labels
 
 
 def shuffle(rng, targets, mp3_files, tids):
     """Shuffle of the targets to be found according to 
         rng.
-    
+
     :param rng: Random generator class.
     :param targets
     :param mp3_files 
@@ -146,11 +82,66 @@ def shuffle(rng, targets, mp3_files, tids):
     return ptargets, pmp3f, ptids
 
 
-def seperate(data, targets, mp3_files, tids, split):
+def reduction_samples(targets, mp3_files, tids, keep_rows):
+    """Reduction of the number of files to be searched.
+
+    :param targets
+    :param mp3_files
+    :param tids
+    :param keep_rows 
+    :returns targets, mp3_files, tids, keep_rows
+    """
+    mp3_files = mp3_files[0:keep_rows]
+    targets = targets[0:keep_rows]
+    tids = tids[0:keep_rows]
+    return targets, mp3_files, tids
+
+
+def sort_tags(targets, labels):
+    """Function to sort the targets and labels according
+        to frequency.
+
+    :param targets: The targets of the labels to be sorted. 
+    :param labels: The labels of the targets.
+    :return: target: Sorted targets and labels.
+    :return: labels: Sorted labels according to frequency
+        of the targets.
+    """
+    sum_of_targets = np.sum(targets, axis=0)
+    indices = np.flipud(np.argsort(sum_of_targets))
+    sorted_targets = targets[:, indices]
+    sorted_labels = labels[indices]
+    return sorted_targets, sorted_labels
+
+
+def extract_data(mp3_filenames, trackid, root, down_sample_factor):
+    """Extract mp3 files and convert to numpy arrays.
+        This data is saved in npy files in tracks folder.
+        
+    :param mp3_filenames
+    :param trackid
+    :param root
+    :param down_sample_factor
+    """
+
+    error_files = []
+    for idx, mp3_filename in enumerate(mp3_filenames):
+        load_filename = root + "mp3_files/" + mp3_filename
+        save_filename = root + "tracks/" + str(trackid[idx]) + ".npy"
+        try:
+            song = AudioSegment.from_mp3(load_filename).get_array_of_samples().tolist()
+        except:
+            error_files.append({'mp3': mp3_filename, 'tid': trackid[idx], 'idx': idx})
+        else:
+            song = np.asarray(song[::down_sample_factor])
+            np.save(save_filename, song)
+    np.save(root + 'error_files.npy', error_files)
+
+
+def seperate_merge(targets, mp3_files, tids, split):
     """Function to seperate the data according to the 
         splits defined.
     
-    :param data
     :param targets 
     :param mp3_files 
     :param tids 
@@ -166,89 +157,94 @@ def seperate(data, targets, mp3_files, tids, split):
     test_sz, valid_sz, train_sz = round(size_of_dataset * split[2]), round(size_of_dataset * split[1]), round(
         size_of_dataset * split[0])
 
-    trn_tgts, trn_data, trn_mp3f, trn_tids = targets[0:train_sz], data[0:train_sz, :], mp3_files[0:train_sz], tids[0:train_sz]
+    trn_tgts, trn_mp3f, trn_tids = targets[0:train_sz], mp3_files[0:train_sz], tids[0:train_sz]
 
-    vld_tgts, vld_data, vld_mp3f, vld_tids = targets[train_sz:train_sz + valid_sz], data[train_sz:train_sz + valid_sz, :], \
-                                             mp3_files[train_sz:train_sz + valid_sz], tids[train_sz:train_sz + valid_sz]
+    vld_tgts, vld_mp3f, vld_tids = targets[train_sz:train_sz + valid_sz], mp3_files[train_sz:train_sz + valid_sz], tids[
+                                                                                        train_sz:train_sz + valid_sz]
 
-    tst_tgts, tst_data, tst_mp3f, tst_tids = targets[train_sz + valid_sz: -1], data[train_sz + valid_sz: -1, :], \
-                                             mp3_files[train_sz + valid_sz: -1], tids[train_sz + valid_sz: -1]
+    tst_tgts, tst_mp3f, tst_tids = targets[train_sz + valid_sz: -1], mp3_files[train_sz + valid_sz: -1], tids[train_sz + valid_sz: -1]
 
-    training_data = {'targets': trn_tgts, 'data': trn_data, 'mp3f': trn_mp3f, 'tids': trn_tids}
-    validation_data = {'targets': vld_tgts, 'data': vld_data, 'mp3f': vld_mp3f, 'tids': vld_tids}
-    test_data = {'targets': tst_tgts, 'data': tst_data, 'mp3f': tst_mp3f, 'tids': tst_tids}
+    training_data = {'targets': trn_tgts, 'mp3f': trn_mp3f, 'tids': trn_tids}
+    validation_data = {'targets': vld_tgts, 'mp3f': vld_mp3f, 'tids': vld_tids}
+    test_data = {'targets': tst_tgts, 'mp3f': tst_mp3f, 'tids': tst_tids}
     return training_data, validation_data, test_data
 
 
-def get_dataset(rng, root, divisions, _size_of = -1):
+def get_dataset(rng, root_folder, data_div, _size_of=-1, _down_sampling_window=3):
     """Function to perform the functions to extract the data.
     
     :param rng 
-    :param root 
-    :param divisions 
+    :param root_folder 
+    :param data_div 
     :param _size_of: Number of samples.
+    :param _down_sampling_window: Down sampling factor.
     :returns: trn_data, vld_data, tst_data, label_map
     """
+
     # Extract tags and names
-    [label_map, mp3_files, targets, tids] = extract_tags_names(root)
+    [targets, mp3_files, tids, map_of_labels] = extract_tags_names(root_folder)
     logger.info("Extracted tags and names into arrays")
-    logger.info("Label_map {}, mp3_files {}, targets {}, tids {}".format(len(label_map), len(mp3_files), targets.shape, tids.shape))
-        
+    logger.info("Label_map {}, mp3_files {}, targets {}, tids {}".format(len(map_of_labels), len(mp3_files),
+                                                                         targets.shape, tids.shape))
+    # Shuffle names and targets
+    [targets, mp3_files, tids] = shuffle(rng, targets, mp3_files, tids)
+    logger.info("Shuffled targets, mp3 files and tids")
+
     # Sample reduction if needed
     [targets, mp3_files, tids] = reduction_samples(targets, mp3_files, tids, _size_of)
     logger.info("Number of samples reduced")
     
     # Sort all targets to be sorted according to frequency
-    [targets, label_map] = sort_tags(targets, label_map)
+    [targets, map_of_labels] = sort_tags(targets, map_of_labels)
     logger.info("Tags sorted according to frequency")
-    
-    # Shuffle names and targets
-    [targets, mp3_files, tids] = shuffle(rng, targets, mp3_files, tids)
-    logger.info("Shuffled targets, mp3 files and tids")
 
-    # Extract data from mp3 files
-    data = extract_data(mp3_files, root, down_sample_factor=3)
-    logger.info("Data extracted from mp3 files")
+    # Extract data from mp3 files and save npy
+    extract_data(mp3_files, tids, root_folder, down_sample_factor=_down_sampling_window)
+    logger.info("Data extracted from mp3 files and saved")
 
-    if len(divisions) != 3:
-        err_str = "The data can be divided in 3. {} divisions given!".format(len(divisions))
+    # Check if 3 divisions are given (train, valid, test)
+    if len(data_div) != 3:
+        err_str = "The data can be divided in 3. {} divisions given!".format(len(data_div))
         logger.error(err_str)
         raise ValueError(err_str)
 
     # Seperate in test, valid, training sets - 20, 10, 70
-    [trndata, vlddata, tstdata] = seperate(data, targets, mp3_files, tids, divisions)
-    return trndata, vlddata, tstdata, label_map
+    [train, valid, test] = seperate_merge(targets, mp3_files, tids, data_div)
+    logger.info("Data separated and merged into dictionaries")
+
+    return train, valid, test, map_of_labels
 
 
-def save_archives(trndata,vlddata, tstdata, label_map):
+def save_archives(train_md, valid_md, test_md, lmap):
     """Function to save the data in archives.
     
-    :param trndata 
-    :param vlddata 
-    :param tstdata 
-    :param label_map
+    :param train_md 
+    :param valid_md 
+    :param test_md 
+    :param lmap
     """
-    train_archive, valid_archive, test_archive = "mtat_train.npz", "mtat_valid.npz", "mtat_test.npz"
+    train_archive, valid_archive, test_archive = "mtat_metatrain.npz", "mtat_metavalid.npz", "mtat_metatest.npz"
+    np.savez(train_archive, label_map=lmap, mp3_files=train_md['mp3f'], targets=train_md['targets'],
+             tids=train_md['tids'])
 
-    np.savez(train_archive, label_map=label_map, mp3_files=trndata['mp3f'], targets=trndata['targets'],
-             tids=trndata['tids'], inputs=trndata['data'])
+    np.savez(valid_archive, label_map=lmap, mp3_files=valid_md['mp3f'], targets=valid_md['targets'],
+             tids=valid_md['tids'])
 
-    np.savez(valid_archive, label_map=label_map, mp3_files=vlddata['mp3f'], targets=vlddata['targets'],
-             tids=vlddata['tids'], inputs=vlddata['data'])
-
-    np.savez(test_archive, label_map=label_map, mp3_files=tstdata['mp3f'], targets=tstdata['targets'],
-             tids=tstdata['tids'], inputs=tstdata['data'])
+    np.savez(test_archive, label_map=lmap, mp3_files=test_md['mp3f'], targets=test_md['targets'],
+             tids=test_md['tids'])
 
 
 if __name__ == "__main__":
     # Extract the dataset
-    root = "magnatagatune/"
-    rng = np.random.RandomState(DEFAULT_SEED)
-    size_of_sets = 10
+    dataset_folder = "magnatagatune/"
+    rndState = np.random.RandomState(DEFAULT_SEED)
+    size_of_sets = -1
+    down_sampling = 1
     divisions = [0.7, 0.1, 0.2]
-    [trndata, vlddata, tstdata, label_map] = get_dataset(rng, root, divisions, _size_of=size_of_sets)
-    logger.info("Extracted the dataset")
+    [trndata, vlddata, tstdata, label_map] = get_dataset(rndState, dataset_folder, divisions, _size_of=size_of_sets,
+                                                         _down_sampling_window=down_sampling)
+    logger.info("Extracted the metadata and save npy files")
 
     # Save data into archive
     save_archives(trndata, vlddata, tstdata, label_map)
-    logger.info("Saved the different sets of data")
+    logger.info("Saved the different sets of metadata")
