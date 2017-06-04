@@ -12,7 +12,6 @@ def glorot_std(params):
     :param params: The input and output layer sizes.
     :returns Standard deviation according to Glorot and Bengio.
     """
-
     return (2./(params[0]+params[1]))**0.5
 
 
@@ -39,9 +38,7 @@ def fully_connected_layer(inputs, szparams, nonlin=tf.nn.relu, batchNorm=False, 
         epsilon = 0.001
         gamma = tf.Variable(tf.ones([szparams[1]]), name='scale')
         beta = tf.Variable(tf.zeros([szparams[1]]), name='shift')
-        
         mean, var = tf.nn.moments(affine_output, axes=[0], name='moments')
-        
         affine_output = tf.nn.batch_normalization(affine_output, mean, var, beta, gamma,
                                                   epsilon, name='batch_normalization')
 
@@ -71,7 +68,6 @@ def fc_layer_batch(inputs, szparams, nonlin=tf.nn.relu, batchNorm=False, keepPro
             is given this is transformed into a list.
         :returns layer_outs: A list with the outputs of each of the layers.
     """
-    
     layer_outs = []
     
     if not isinstance(nonlin, list):
@@ -94,28 +90,8 @@ def fc_layer_batch(inputs, szparams, nonlin=tf.nn.relu, batchNorm=False, keepPro
 
 
 def define_summaries(scalar_sd = None, histogram_sd = None, image_sd = None ):
-    """Function to define summaries
-    
-    Summaries are provided in dictionaries where the key is used
-    for the name of the summary and the value is used as the num
-    to be stored.
-    
-    :param scalar_sd: Scalar values to be saved as summaries.
-    :param histogram_sd: Values to be stored as histograms.
-    :param image_sd: Values to be stored as images.
-    :returns merged_summary: The merged summary of saved items.
-    """
-    if scalar_sd is not None:
-        for key, value in scalar_sd.items():
-            tf.summary.scalar(key, value)
-    if histogram_sd is not None:
-        for key, value in histogram_sd.items():
-            tf.summary.histogram(key, value)
-    if image_sd is not None:
-        for key, value in image_sd.items():
-            tf.summary.image(key, value)
-    summary_merged = tf.summary.merge_all()
-    return summary_merged
+
+
 
 # TODO: Check function on the tensorflow API documentation
 def maxpool_layer(inputs, div=(2,2)):
@@ -126,3 +102,107 @@ def maxpool_layer(inputs, div=(2,2)):
     :return: Max-pooled layer.
     """
     return tf.nn.max_pool(inputs, ksize=[1, div[0], div[1], 1], strides=[1, div[0], div[1], 1], padding='SAME')
+
+
+
+
+
+class tfgraph(object):
+
+    def __init__(self, graph):
+        self.graph=graph
+        self.layer_outs = []
+
+
+    def add_ffl(self, inputs, outsize, nonlin=tf.nn.relu, batchNorm=False, keepProb):
+        with self.graph:
+            output = ff_layer(inputs, outsize, nonlin, batchNorm, keepProb)
+        self.layer_outs.append(output)
+
+    def add_conv1l(self, inputs, outsize, kersize, nonlin=tf.nn.relu, batchNorm=False, keepProb=1, padding, dilution):
+        with self.graph:
+            output = conv1_layer(inputs, outsize, kersize, nonlin, stride, batchNorm, keepProb, padding, dilution)   
+        self.layer_outs.append(output)
+
+
+    def add_conv2l(self, inputs, outsize, kersize, nonlin=tf.nn.relu, batchNorm=False, keepProb=1, padding, dilution):
+        with self.graph:
+            output = conv2_layer(inputs, outsize, kersize, nonlin, stride, batchNorm, keepProb, padding, dilution)
+        self.layer_outs.append(output)
+
+
+    def add_maxpool(self, inputs, div, padding="SAME"):
+        with self.graph:
+            output = maxpool(inputs, div, padding)
+        self.layer_outs.append(output)
+
+
+    def add_avgpool(self, inputs, div, padding="SAME"):	
+        with self.graph:
+            output = avgpool(inputs, div, padding)
+        self.layer_outs.append(output)
+
+
+    def add_batchnorm(self):
+        with self.graph:
+            output = batchNorm(inputs):
+        self.layer_outs.append(output)
+
+
+    def initialise(self):
+        with self.graph:
+            # initialise
+
+    
+    def add_summary(self, name, value, stype):
+        """Function to define summary
+    
+        A name together with a value and type of summary is
+        provided to the function. The summary is added to the
+        graph.
+
+        :param scalar_sd: Scalar values to be saved as summaries.
+        :param histogram_sd: Values to be stored as histograms.
+        :param image_sd: Values to be stored as images.
+        :returns merged_summary: The merged summary of saved items.
+        TODO: Add other summaries such as distributions, etc.
+        """
+        assert stype in ['scalar', 'histogram', 'image'], (
+            'Expected type to be either scalar, histogram or image. '
+            'Got {0}'.format(stype))
+
+        with self.graph:
+            if stype='scalar:
+                tf.summary.scalar(name, value)
+            elif stype='histogram':
+                tf.summary.histogram(name, value)
+            else: 
+                tf.summary.image(name, value)
+
+    
+    def merge_summaries(self):
+        with self.graph:
+            merged = tf.summary.merge_all()
+        return merged
+
+    def train(self, train_set, eval_set, ):
+        # train function
+
+
+    def save_model(self):
+        # save model
+
+
+    def load_model(self):
+        # load model
+
+    
+    def save_layers_wav(self):
+        # save layers wave
+
+    def sound_layer(self, layer_num):
+        # convert layer to wav
+        # play wav file
+
+    def test_graph(self, test_set_provider, results=['confusion'])
+        # test graph with unseen dataset
