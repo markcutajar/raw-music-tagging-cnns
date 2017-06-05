@@ -18,15 +18,20 @@ def glorot_std(params):
     
 class tfgraph(object):
 
-    def __init__(self, graph, inputs):
+    def __init__(self, graph, inputs, targets, sess, input_layer_name):
         self.graph=graph
+     
         self.layer_outs = {}
-        self.layer_outs['inputs'] = inputs
-        self.last_name = 'inputs'
-
+        self.layer_outs[input_layer_name] = inputs
+        self.last_name = input_layer_name
+        self.targets = targets
+        
+        self.errors = {}
+        self.accuracies = {}
+        
+        self.session = sess
     
     def add_ffl(self,
-                inputs,
                 units,
                 activation=None,
                 use_bias=True,
@@ -45,25 +50,25 @@ class tfgraph(object):
                
         """
         with self.graph:
-            output = tf.layers.dense(inputs,
-                                     units,
-                                     activation=None,
-                                     use_bias=True,
-                                     kernel_initializer=None,
-                                     bias_initializer=tf.zeros_initializer(),
-                                     kernel_regularizer=None,
-                                     bias_regularizer=None,
-                                     activity_regularizer=None,
-                                     trainable=True,
-                                     name,
-                                     reuse=None
-                                    )
+            with tf.name_scope(name):
+                output = tf.layers.dense(inputs=self.layer_outs[self.last_name],
+                                         units=units,
+                                         activation=activation,
+                                         use_bias=use_bias,
+                                         kernel_initializer=kernel_initializer,
+                                         bias_initializer=bias_initializer,
+                                         kernel_regularizer=kernel_regularizer,
+                                         bias_regularizer=bias_regularizer,
+                                         activity_regularizer=activity_regularizer,
+                                         trainable=trainable,
+                                         name=name,
+                                         reuse=reuse
+                                        )
             self.layer_outs[name] = output
             self.last_name = name
             
             
     def add_conv1l(self,
-                   inputs,
                    filters,
                    kernel_size,
                    strides=1,
@@ -87,30 +92,30 @@ class tfgraph(object):
                
         """       
         with self.graph:
-            output = tf.layers.conv1d(inputs,
-                                      filters,
-                                      kernel_size,
-                                      strides=1,
-                                      padding='valid',
-                                      data_format='channels_last',
-                                      dilation_rate=1,
-                                      activation=None,
-                                      use_bias=True,
-                                      kernel_initializer=None,
-                                      bias_initializer=tf.zeros_initializer(),
-                                      kernel_regularizer=None,
-                                      bias_regularizer=None,
-                                      activity_regularizer=None,
-                                      trainable=True,
-                                      name,
-                                      reuse=None
-                                     )  
+            with tf.name_scope(name):
+                output = tf.layers.conv1d(inputs=self.layer_outs[self.last_name],
+                                          filters=filters,
+                                          kernel_size=kernel_size,
+                                          strides=strides,
+                                          padding=padding,
+                                          data_format=data_format,
+                                          dilation_rate=dilation_rate,
+                                          activation=activation,
+                                          use_bias=use_bias,
+                                          kernel_initializer=kernel_initializer,
+                                          bias_initializer=bias_initializer,
+                                          kernel_regularizer=kernel_regularizer,
+                                          bias_regularizer=bias_regularizer,
+                                          activity_regularizer=activity_regularizer,
+                                          trainable=trainable,
+                                          name=name,
+                                          reuse=reuse
+                                         )  
             self.layer_outs[name] = output
             self.last_name = name
             
 
-    def add_conv2l(self,  
-                   inputs,
+    def add_conv2l(self,
                    filters,
                    kernel_size,
                    strides=(1, 1),
@@ -134,55 +139,55 @@ class tfgraph(object):
                
         """    
         with self.graph:
-            output = tf.layers.conv2d(inputs,
-                                      filters,
-                                      kernel_size,
-                                      strides=(1, 1),
-                                      padding='valid',
-                                      data_format='channels_last',
-                                      dilation_rate=(1, 1),
-                                      activation=None,
-                                      use_bias=True,
-                                      kernel_initializer=None,
-                                      bias_initializer=tf.zeros_initializer(),
-                                      kernel_regularizer=None,
-                                      bias_regularizer=None,
-                                      activity_regularizer=None,
-                                      trainable=True,
-                                      name,
-                                      reuse=None
-                                     )
+            with tf.name_scope(name):
+                output = tf.layers.conv2d(inputs=self.layer_outs[self.last_name],
+                                          filters=filters,
+                                          kernel_size=kernel_size,
+                                          strides=strides,
+                                          padding=padding,
+                                          data_format=data_format,
+                                          dilation_rate=dilation_rate,
+                                          activation=activation,
+                                          use_bias=use_bias,
+                                          kernel_initializer=kernel_initializer,
+                                          bias_initializer=bias_initializer,
+                                          kernel_regularizer=kernel_regularizer,
+                                          bias_regularizer=bias_regularizer,
+                                          activity_regularizer=activity_regularizer,
+                                          trainable=trainable,
+                                          name=name,
+                                          reuse=reuse
+                                         )
             self.layer_outs[name] = output
             self.last_name = name
             
 
-    def add_maxpool1(self, 
-                    inputs,
-                    pool_size,
-                    strides,
-                    padding='valid',
-                    data_format='channels_last',
-                    name
-                   ):
+    def add_maxpool1(self,
+                     pool_size,
+                     strides,
+                     padding='valid',
+                     data_format='channels_last',
+                     name
+                    ):
         """Function to add a maxpool layer to the graph.
 
         :param inputs: 
                
         """
         with self.graph:
-            output = tf.layers.max_pooling1d(inputs,
-                                         pool_size,
-                                         strides,
-                                         padding='valid',
-                                         data_format='channels_last',
-                                         name
-                                        )
+            with tf.name_scope(name):
+                output = tf.layers.max_pooling1d(inputs=self.layer_outs[self.last_name],
+                                                 pool_size=pool_size,
+                                                 strides=strides,
+                                                 padding=padding,
+                                                 data_format=data_format,
+                                                 name=name
+                                                )
             self.layer_outs[name] = output
             self.last_name = name
             
             
     def add_avgpool1(self,
-                     inputs,
                      pool_size,
                      strides,
                      padding='valid',
@@ -195,19 +200,19 @@ class tfgraph(object):
                
         """
         with self.graph:
-            output = tf.layers.average_pooling1d(inputs,
-                                                 pool_size,
-                                                 strides,
-                                                 padding='valid',
-                                                 data_format='channels_last',
-                                                 name
-                                                )
+            with tf.name_scope(name):
+                output = tf.layers.average_pooling1d(inputs=self.layer_outs[self.last_name],
+                                                     pool_size=pool_size,
+                                                     strides=strides,
+                                                     padding=padding,
+                                                     data_format=data_format,
+                                                     name=name
+                                                    )
             self.layer_outs[name] = output
             self.last_name = name
             
 
     def add_batchnorm(self,
-                      inputs,
                       axis=-1,
                       momentum=0.99,
                       epsilon=0.001,
@@ -230,28 +235,29 @@ class tfgraph(object):
                
         """
         with self.graph:
-            output = tf.layers.batch_normalization(inputs,
-                                                   axis=-1,
-                                                   momentum=0.99,
-                                                   epsilon=0.001,
-                                                   center=True,
-                                                   scale=True,
-                                                   beta_initializer=tf.zeros_initializer(),
-                                                   gamma_initializer=tf.ones_initializer(),
-                                                   moving_mean_initializer=tf.zeros_initializer(),
-                                                   moving_variance_initializer=tf.ones_initializer(),
-                                                   beta_regularizer=None,
-                                                   gamma_regularizer=None,
-                                                   training=False,
-                                                   trainable=True,
-                                                   name,
-                                                   reuse=None
-                                                  )
+            with tf.name_scope(name):
+                output = tf.layers.batch_normalization(inputs=self.layer_outs[self.last_name]
+                                                       axis=axis,
+                                                       momentum=momentum
+                                                       epsilon=epsilon
+                                                       center=center,
+                                                       scale=scale,
+                                                       beta_initializer=beta_initializer,
+                                                       gamma_initializer=gamma_initializer,
+                                                       moving_mean_initializer=moving_mean_initializer,
+                                                       moving_variance_initializer=moving_variance_initializer,
+                                                       beta_regularizer=beta_regularizer,
+                                                       gamma_regularizer=gamma_regularizer,
+                                                       training=training,
+                                                       trainable=trainable,
+                                                       name=name
+                                                       reuse=reuse
+                                                      )
             self.layer_outs[name] = output
+            self.last_name = name
+            
 
-
-    def add_dropout(inputs,
-                    rate=0.5,
+    def add_dropout(rate=0.5,
                     noise_shape=None,
                     seed=None,
                     training=False,
@@ -263,39 +269,116 @@ class tfgraph(object):
                
         """
         with self.graph:
-            output = tf.layers.dropout(inputs,
-                                       rate=0.5,
-                                       noise_shape=None,
-                                       seed=None,
-                                       training=False,
-                                       name
-                                      )
+            with tf.name_scope(name):
+                output = tf.layers.dropout(inputs=self.layer_outs[self.last_name]
+                                           rate=rate
+                                           noise_shape=noise_shape,
+                                           seed=seed,
+                                           training=training,
+                                           name=name
+                                          )
             self.layer_outs[name] = output
             self.last_name = name
             
             
-    def residual_layer(self, 
-                       residual_layer_idx, ):
-            
-        inputs = self.layer_outs[-1]
-        residues = self.layer_out[residual_layer_idx]
+    def residual_layer(self, residual_layer_name, activation=None, name):
+        """Function to add a residual layer to the graph.
+        
+        :param inputs: 
+               
+        """   
+        inputs = self.layer_outs[self.last_name]
+        residues = self.layer_out[residual_layer_name]
         
         if inputs.shape != residues.shape:
             raise ValueError('Inputs {} and residues {} must have the same dimension for residual layer'
                             .format(inputs.shape, residues.shape))
        
         with self.graph:  
-            output = inputs + residues
-            output = activation(output)
-            self.layer_outs.append(output)
+            with tf.name_scope(name):
+                
+                output = inputs + residues # Tensors do not add
+                if activation is not None:
+                    output = activation(output)
+                
+            self.layer_outs[name] = output
             self.last_name = name
             
+    
+    def accuracy(self, output_layer_name, name):
+        """Function to calculate accuracy of certain output.
+
+        :param inputs: 
+               
+        """
+        with self.graph():
+            with tf.name_scope(name):
+                accuracy = tf.metrics.accuracy(labels=self.targets,
+                                               predictions=self.layer_outs[output_layer_name],
+                                               weights=None,
+                                               metrics_collections=None,
+                                               updates_collections=None,
+                                               name=name
+                                              )
+            self.accuracies[name] = accuracy
+        
+        
+    def get_accuracy(self, name):
+        """Return an accuracy with a particular name."""
+        return self.accuracies[name]
+    
+    
+    def error_softmax(self, output_layer_name, name):
+        """Function to calculate softmax error of certain output.
+
+        :param inputs: 
+               
+        """
+        with self.graph:
+            with tf.name_scope(name):
+                error = tf.losses.softmax_cross_entropy(onehot_labels=self.targets,
+                                                        logits=self.layer_outs[output_layer_name],
+                                                        weights=1.0,
+                                                        label_smoothing=0,
+                                                        scope=None,
+                                                        loss_collection=tf.GraphKeys.LOSSES
+                                                       )
+            self.errors[name] = error
+        
+        
+    def error_sigmoid(self, output_layer_name, name):
+        """Function to calculate sigmoid error of certain output.
+
+        :param inputs: 
+               
+        """
+        with self.graph:
+            with tf.name_scope(name):
+                error = tf.losses.sigmoid_cross_entropy(multi_class_labels=self.targets,
+                                                        logits=self.logits,
+                                                        weights=1.0,
+                                                        label_smoothing=0,
+                                                        scope=None,
+                                                        loss_collection=tf.GraphKeys.LOSSES
+                                                       )
+        self.errors[name] = error
+    
+    
+    def get_error(self, name):
+        """Return an error with a particular name."""
+        return self.errors[name]
+    
+    
+    def set_train(self, optimizer=tf.train.AdamOptimizer(), name_error):
+        with self.graph('train-' + name_error)
+        self.train_step = optimizer.minimize(self.error)
+        
         
     def initialise(self):
         with self.graph:
-            # initialise
-
-    
+            self.session.run(tf.global_variables_initializer())
+            
+            
     def add_summary(self, name, value, stype):
         """Function to define summary
     
@@ -349,46 +432,3 @@ class tfgraph(object):
 
     def test_graph(self, test_set_provider, results=['confusion'])
         # test graph with unseen dataset
-        
-
-        
-        
-        
-def fc_layer_batch(inputs, szparams, nonlin=tf.nn.relu, batchNorm=False, keepProb=1):
-    """Function to construct numerous feed forward layers.
-    
-    Given arrays of sizes, non-linearities, batch normalization
-    booleans and keep wieght probabilities; numerous layers are
-    constructed.
-    
-    :param inputs: Input tensor.
-    :param szparams: List with the inputs and outputs of the layers.
-    :param nonlin: List of the non-linearities of the different
-            layers. If a single non-linearity is given, this is 
-            transformed into a list.
-    :param batchNorm: List of batch normalizaton booleans. If a
-            single boolean is given this is transformed into a
-            list.
-    :param keepProb: List of keep probabilities. If a single boolean
-            is given this is transformed into a list.
-        :returns layer_outs: A list with the outputs of each of the layers.
-    """
-    layer_outs = []
-    
-    if not isinstance(nonlin, list):
-        nonlin = [nonlin]*len(szparams)
-    if not isinstance(batchNorm, list):
-        batchNorm = [batchNorm]*len(szparams)
-    if not isinstance(keepProb, list):
-        keepProb = [keepProb]*len(szparams)
-    
-    din = inputs
-    for lidx, sz in enumerate(szparams):
-        if lidx != 0:
-            din = layer_outs[-1]
-            
-        with tf.name_scope('fc-layer-{0}'.format(lidx)):
-            lout = ff_layer(din, sz, nonlin=nonlin[lidx], batchNorm=batchNorm, keepProb=keepProb)
-            layer_outs.append(lout)
-            
-    return layer_outs
