@@ -17,8 +17,9 @@ class tfgraph(object):
         :param
         """
         self.graph = graph
-        with self.graph:
-            with tf.name_scope('inputs and targets placeholders'):
+        
+        with self.graph.as_default():
+            with tf.name_scope('placeholders'):
                 
                 inputs = tf.placeholder(tf.float32, inputs_size, 'inputs')
                 targets = tf.placeholder(tf.float32, targets_size, 'targets')
@@ -33,16 +34,11 @@ class tfgraph(object):
             self.accuracies = {}
         
             self.session = sess
-def glorot_std(params):
-    """Function to return the STD    
-    :param params: The input and output layer sizes.
-    :returns Standard deviation according to Glorot and Bengio.
-    """
-    return (2./(params[0]+params[1]))**0.5
-    
+       
     
     def add_ffl(self,
                 units,
+                name,
                 activation=None,
                 use_bias=True,
                 kernel_initializer=None,
@@ -51,7 +47,6 @@ def glorot_std(params):
                 bias_regularizer=None,
                 activity_regularizer=None,
                 trainable=True,
-                name,
                 reuse=None
                ):
         """Function to add a single fully connected layer to the graph.
@@ -59,7 +54,7 @@ def glorot_std(params):
         :param inputs: 
                
         """
-        with self.graph:
+        with self.graph.as_default():
             with tf.name_scope(name):
                 output = tf.layers.dense(inputs=self.layer_outs[self.last_name],
                                          units=units,
@@ -81,6 +76,7 @@ def glorot_std(params):
     def add_conv1l(self,
                    filters,
                    kernel_size,
+                   name,
                    strides=1,
                    padding='valid',
                    data_format='channels_last',
@@ -93,7 +89,6 @@ def glorot_std(params):
                    bias_regularizer=None,
                    activity_regularizer=None,
                    trainable=True,
-                   name,
                    reuse=None
                   ):
         """Function to add a conv1d layer to the graph.
@@ -101,7 +96,7 @@ def glorot_std(params):
         :param inputs: 
                
         """       
-        with self.graph:
+        with self.graph.as_default():
             with tf.name_scope(name):
                 output = tf.layers.conv1d(inputs=self.layer_outs[self.last_name],
                                           filters=filters,
@@ -128,6 +123,7 @@ def glorot_std(params):
     def add_conv2l(self,
                    filters,
                    kernel_size,
+                   name,
                    strides=(1, 1),
                    padding='valid',
                    data_format='channels_last',
@@ -140,7 +136,6 @@ def glorot_std(params):
                    bias_regularizer=None,
                    activity_regularizer=None,
                    trainable=True,
-                   name,
                    reuse=None
                   ):
         """Function to add a conv2d layer to the graph.
@@ -148,7 +143,7 @@ def glorot_std(params):
         :param inputs: 
                
         """    
-        with self.graph:
+        with self.graph.as_default():
             with tf.name_scope(name):
                 output = tf.layers.conv2d(inputs=self.layer_outs[self.last_name],
                                           filters=filters,
@@ -175,16 +170,16 @@ def glorot_std(params):
     def add_maxpool1(self,
                      pool_size,
                      strides,
+                     name,
                      padding='valid',
-                     data_format='channels_last',
-                     name
+                     data_format='channels_last'
                     ):
         """Function to add a maxpool layer to the graph.
 
         :param inputs: 
                
         """
-        with self.graph:
+        with self.graph.as_default():
             with tf.name_scope(name):
                 output = tf.layers.max_pooling1d(inputs=self.layer_outs[self.last_name],
                                                  pool_size=pool_size,
@@ -200,16 +195,16 @@ def glorot_std(params):
     def add_avgpool1(self,
                      pool_size,
                      strides,
+                     name,
                      padding='valid',
-                     data_format='channels_last',
-                     name
+                     data_format='channels_last'
                     ):
         """Function to add a avg pool layer to the graph.
 
         :param inputs: 
                
         """
-        with self.graph:
+        with self.graph.as_default():
             with tf.name_scope(name):
                 output = tf.layers.average_pooling1d(inputs=self.layer_outs[self.last_name],
                                                      pool_size=pool_size,
@@ -223,6 +218,7 @@ def glorot_std(params):
             
 
     def add_batchnorm(self,
+                      name,
                       axis=-1,
                       momentum=0.99,
                       epsilon=0.001,
@@ -236,7 +232,6 @@ def glorot_std(params):
                       gamma_regularizer=None,
                       training=False,
                       trainable=True,
-                      name,
                       reuse=None
                      ):
         """Function to add a batch normalization layer to the graph.
@@ -244,12 +239,12 @@ def glorot_std(params):
         :param inputs: 
                
         """
-        with self.graph:
+        with self.graph.as_default():
             with tf.name_scope(name):
-                output = tf.layers.batch_normalization(inputs=self.layer_outs[self.last_name]
+                output = tf.layers.batch_normalization(inputs=self.layer_outs[self.last_name],
                                                        axis=axis,
-                                                       momentum=momentum
-                                                       epsilon=epsilon
+                                                       momentum=momentum,
+                                                       epsilon=epsilon,
                                                        center=center,
                                                        scale=scale,
                                                        beta_initializer=beta_initializer,
@@ -260,28 +255,28 @@ def glorot_std(params):
                                                        gamma_regularizer=gamma_regularizer,
                                                        training=training,
                                                        trainable=trainable,
-                                                       name=name
+                                                       name=name,
                                                        reuse=reuse
                                                       )
             self.layer_outs[name] = output
             self.last_name = name
             
 
-    def add_dropout(rate=0.5,
+    def add_dropout(name,
+                    rate=0.5,
                     noise_shape=None,
                     seed=None,
-                    training=False,
-                    name
+                    training=False
                    ):
         """Function to add a dropout layer to the graph.
 
         :param inputs: 
                
         """
-        with self.graph:
+        with self.graph.as_default():
             with tf.name_scope(name):
-                output = tf.layers.dropout(inputs=self.layer_outs[self.last_name]
-                                           rate=rate
+                output = tf.layers.dropout(inputs=self.layer_outs[self.last_name],
+                                           rate=rate,
                                            noise_shape=noise_shape,
                                            seed=seed,
                                            training=training,
@@ -291,7 +286,7 @@ def glorot_std(params):
             self.last_name = name
             
             
-    def residual_layer(self, residual_layer_name, activation=None, name):
+    def residual_layer(self, residual_layer_name, name, activation=None):
         """Function to add a residual layer to the graph.
         
         :param inputs: 
@@ -304,7 +299,7 @@ def glorot_std(params):
             raise ValueError('Inputs {} and residues {} must have the same dimension for residual layer'
                             .format(inputs.shape, residues.shape))
        
-        with self.graph:  
+        with self.graph.as_default():  
             with tf.name_scope(name):
                 
                 output = inputs + residues # Tensors do not add
@@ -321,7 +316,7 @@ def glorot_std(params):
         :param inputs: 
                
         """
-        with self.graph():
+        with self.graph.as_default():
             with tf.name_scope(name):
                 accuracy = tf.metrics.accuracy(labels=self.targets,
                                                predictions=self.layer_outs[output_layer_name],
@@ -344,7 +339,7 @@ def glorot_std(params):
         :param inputs: 
                
         """
-        with self.graph:
+        with self.graph.as_default():
             with tf.name_scope(name):
                 error = tf.losses.softmax_cross_entropy(onehot_labels=self.targets,
                                                         logits=self.layer_outs[output_layer_name],
@@ -362,7 +357,7 @@ def glorot_std(params):
         :param inputs: 
                
         """
-        with self.graph:
+        with self.graph.as_default():
             with tf.name_scope(name):
                 error = tf.losses.sigmoid_cross_entropy(multi_class_labels=self.targets,
                                                         logits=self.logits,
@@ -379,20 +374,20 @@ def glorot_std(params):
         return self.errors[name]
     
     
-    def set_train(self, optimizer=tf.train.AdamOptimizer(), name_error):
+    def set_train(self, name_error, optimizer=tf.train.AdamOptimizer()):
         """Set train function."""
-        with self.graph:
+        with self.graph.as_default():
             with tf.name_scope('train-' + name_error):
                 train_step = optimizer.minimize(self.error)
         
         
     def initialise(self):
         """Initialise graph variables."""
-        with self.graph:
+        with self.graph.as_default():
             self.session.run(tf.global_variables_initializer())
             
             
-    def train(self, data_provider, pre_processor=None, error_name, accuracy_name, epochs):
+    def train(self, train_data, error_name, accuracy_name, preprocessor=None, epochs=100):
         """Function to train the graph.
         
         Please note that this function gets information by an iterable.
@@ -402,33 +397,35 @@ def glorot_std(params):
         measured_errors = []
         measured_accs = []
         
-        for epoch in range(epochs): 
-            
-            run_error = 0.
-            run_acc = 0.
-            
-            for input_batch, target_batch in data_provider:
-                
-                if preprocessor is not None:
-                    input_batch = preprocessor(input_batch)
-                    
-                [train_steps, batch_error, accuracy_error] = sess.run(
-                    [_, self.errors[error_name], self.accuracies[accuracy_name]],
-                    feed_dict={inputs: input_batch, targets: target_batch})
-                
-                run_error += batch_error
-                run_acc += batch_acc
-                
-            run_error /= provider.batch_size
-            run_acc /= provider.batch_size
-            
-            measured_errors.append(run_error)
-            measured_accs.append(run_acc)
+        with self.graph.as_default():
+        
+            for epoch in range(epochs): 
+
+                run_error = 0.
+                run_acc = 0.
+
+                for input_batch, target_batch in train_data:
+
+                    if preprocessor is not None:
+                        input_batch = preprocessor(input_batch)
+
+                    [train_steps, batch_error, accuracy_error] = sess.run(
+                        [_, self.errors[error_name], self.accuracies[accuracy_name]],
+                        feed_dict={inputs: input_batch, targets: target_batch})
+
+                    run_error += batch_error
+                    run_acc += batch_acc
+
+                run_error /= provider.batch_size
+                run_acc /= provider.batch_size
+
+                measured_errors.append(run_error)
+                measured_accs.append(run_acc)
         
         return measured_errors, measured_accs
     
     
-    def train_eval(self, train_data, valid_data, pre_processor=None, error_name, accuracy_name, epochs=100, valid_step=10):
+    def train_eval(self, train_data, valid_data, error_name, accuracy_name, preprocessor=None, epochs=100, valid_step=10):
         """Function to train and evaluate the graph.
         
         Please note that this function gets information by an iterable.
@@ -440,41 +437,20 @@ def glorot_std(params):
         valid_errors = []
         valid_accs = []
         
-        for epoch in range(epochs): 
-            
-            run_error = 0.
-            run_acc = 0.
-            
-            for input_batch, target_batch in train_data:
-                
-                if preprocessor is not None:
-                    input_batch = preprocessor(input_batch)
-                    
-                [_, batch_error, accuracy_error] = sess.run(
-                    [train_step, self.errors[error_name], self.accuracies[accuracy_name]],
-                    feed_dict={inputs: input_batch, targets: target_batch})
-                
-                run_error += batch_error
-                run_acc += batch_acc
-                
-            run_error /= provider.batch_size
-            run_acc /= provider.batch_size
-            
-            train_errors.append(run_error)
-            train_accs.append(run_acc)
-            
-            if (epoch + 1) % valid_step == 0:
-                
+        with self.graph.as_default():
+        
+            for epoch in range(epochs): 
+
                 run_error = 0.
                 run_acc = 0.
 
-                for input_batch, target_batch in valid_data:
+                for input_batch, target_batch in train_data:
 
                     if preprocessor is not None:
                         input_batch = preprocessor(input_batch)
 
-                    [batch_error, accuracy_error] = sess.run(
-                        [self.errors[error_name], self.accuracies[accuracy_name]],
+                    [_, batch_error, accuracy_error] = sess.run(
+                        [train_step, self.errors[error_name], self.accuracies[accuracy_name]],
                         feed_dict={inputs: input_batch, targets: target_batch})
 
                     run_error += batch_error
@@ -483,8 +459,31 @@ def glorot_std(params):
                 run_error /= provider.batch_size
                 run_acc /= provider.batch_size
 
-                valid_errors.append(run_error)
-                valid_accs.append(run_acc)
+                train_errors.append(run_error)
+                train_accs.append(run_acc)
+
+                if (epoch + 1) % valid_step == 0:
+
+                    run_error = 0.
+                    run_acc = 0.
+
+                    for input_batch, target_batch in valid_data:
+
+                        if preprocessor is not None:
+                            input_batch = preprocessor(input_batch)
+
+                        [batch_error, accuracy_error] = sess.run(
+                            [self.errors[error_name], self.accuracies[accuracy_name]],
+                            feed_dict={inputs: input_batch, targets: target_batch})
+
+                        run_error += batch_error
+                        run_acc += batch_acc
+
+                    run_error /= provider.batch_size
+                    run_acc /= provider.batch_size
+
+                    valid_errors.append(run_error)
+                    valid_accs.append(run_acc)
 
         return train_errors, train_accs, valid_errors, valid_accs
     
@@ -506,32 +505,34 @@ def glorot_std(params):
             'Expected type to be either scalar, histogram or image. '
             'Got {0}'.format(stype))
 
-        with self.graph:
-            if stype='scalar:
+        with self.graph.as_default():
+            if stype == 'scalar':
                 tf.summary.scalar(name, value)
-            elif stype='histogram':
+            elif stype == 'histogram':
                 tf.summary.histogram(name, value)
             else: 
                 tf.summary.image(name, value)
 
     
     def merge_summaries(self):
-        with self.graph:
+        with self.graph.as_default():
             merged = tf.summary.merge_all()
         return merged
 
     
     def save_model(self, path):
-        with self.session:
-            model_saver = tf.train.Saver()
-            model_saver.save(self.session, path)        
-            model_saver.export_meta_graph(path + '.meta')
+        with self.graph.as_default():
+            with self.session:
+                model_saver = tf.train.Saver()
+                model_saver.save(self.session, path)        
+                model_saver.export_meta_graph(path + '.meta')
 
 
     def load_model(self, path):
-        with self.session:
-            model_loader = tf.train.import_meta_graph(path + '.meta')
-            model_loader.restore(self.session, path)
+        with self.graph.as_default():
+            with self.session:
+                model_loader = tf.train.import_meta_graph(path + '.meta')
+                model_loader.restore(self.session, path)
 
     
     def single_test(self, single_sample, sample_targets):
@@ -541,7 +542,7 @@ def glorot_std(params):
                
         """ 
         name_list, value_list = []
-        with self.graph:
+        with self.graph.as_default():
             for key, value in self.layer_outs.iteritems():
                 name_list.append(key)
                 value_list.append(value)
