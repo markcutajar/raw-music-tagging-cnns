@@ -18,11 +18,13 @@ def glorot_std(params):
     
 class tfgraph(object):
 
-    def __init__(self, graph):
+    def __init__(self, graph, inputs):
         self.graph=graph
-        self.layer_outs = []
+        self.layer_outs = {}
+        self.layer_outs['inputs'] = inputs
+        self.last_name = 'inputs'
 
-
+    
     def add_ffl(self,
                 inputs,
                 units,
@@ -34,7 +36,7 @@ class tfgraph(object):
                 bias_regularizer=None,
                 activity_regularizer=None,
                 trainable=True,
-                name=None,
+                name,
                 reuse=None
                ):
         """Function to add a single fully connected layer to the graph.
@@ -53,11 +55,12 @@ class tfgraph(object):
                                      bias_regularizer=None,
                                      activity_regularizer=None,
                                      trainable=True,
-                                     name=None,
+                                     name,
                                      reuse=None
                                     )
-            self.layer_outs.append(output)
-
+            self.layer_outs[name] = output
+            self.last_name = name
+            
             
     def add_conv1l(self,
                    inputs,
@@ -75,7 +78,7 @@ class tfgraph(object):
                    bias_regularizer=None,
                    activity_regularizer=None,
                    trainable=True,
-                   name=None,
+                   name,
                    reuse=None
                   ):
         """Function to add a conv1d layer to the graph.
@@ -99,11 +102,12 @@ class tfgraph(object):
                                       bias_regularizer=None,
                                       activity_regularizer=None,
                                       trainable=True,
-                                      name=None,
+                                      name,
                                       reuse=None
                                      )  
-            self.layer_outs.append(output)
-
+            self.layer_outs[name] = output
+            self.last_name = name
+            
 
     def add_conv2l(self,  
                    inputs,
@@ -121,7 +125,7 @@ class tfgraph(object):
                    bias_regularizer=None,
                    activity_regularizer=None,
                    trainable=True,
-                   name=None,
+                   name,
                    reuse=None
                   ):
         """Function to add a conv2d layer to the graph.
@@ -145,11 +149,12 @@ class tfgraph(object):
                                       bias_regularizer=None,
                                       activity_regularizer=None,
                                       trainable=True,
-                                      name=None,
+                                      name,
                                       reuse=None
                                      )
-            self.layer_outs.append(output)
-
+            self.layer_outs[name] = output
+            self.last_name = name
+            
 
     def add_maxpool1(self, 
                     inputs,
@@ -157,7 +162,7 @@ class tfgraph(object):
                     strides,
                     padding='valid',
                     data_format='channels_last',
-                    name=None
+                    name
                    ):
         """Function to add a maxpool layer to the graph.
 
@@ -170,10 +175,11 @@ class tfgraph(object):
                                          strides,
                                          padding='valid',
                                          data_format='channels_last',
-                                         name=None
+                                         name
                                         )
-            self.layer_outs.append(output)
-
+            self.layer_outs[name] = output
+            self.last_name = name
+            
             
     def add_avgpool1(self,
                      inputs,
@@ -181,7 +187,7 @@ class tfgraph(object):
                      strides,
                      padding='valid',
                      data_format='channels_last',
-                     name=None
+                     name
                     ):
         """Function to add a avg pool layer to the graph.
 
@@ -194,10 +200,11 @@ class tfgraph(object):
                                                  strides,
                                                  padding='valid',
                                                  data_format='channels_last',
-                                                 name=None
+                                                 name
                                                 )
-            self.layer_outs.append(output)
-
+            self.layer_outs[name] = output
+            self.last_name = name
+            
 
     def add_batchnorm(self,
                       inputs,
@@ -214,7 +221,7 @@ class tfgraph(object):
                       gamma_regularizer=None,
                       training=False,
                       trainable=True,
-                      name=None,
+                      name,
                       reuse=None
                      ):
         """Function to add a batch normalization layer to the graph.
@@ -237,10 +244,10 @@ class tfgraph(object):
                                                    gamma_regularizer=None,
                                                    training=False,
                                                    trainable=True,
-                                                   name=None,
+                                                   name,
                                                    reuse=None
-                                                  ):
-            self.layer_outs.append(output)
+                                                  )
+            self.layer_outs[name] = output
 
 
     def add_dropout(inputs,
@@ -248,7 +255,7 @@ class tfgraph(object):
                     noise_shape=None,
                     seed=None,
                     training=False,
-                    name=None
+                    name
                    ):
         """Function to add a dropout layer to the graph.
 
@@ -261,11 +268,14 @@ class tfgraph(object):
                                        noise_shape=None,
                                        seed=None,
                                        training=False,
-                                       name=None
+                                       name
                                       )
-            self.layer_outs.append(output)
-        
-    def residual_layer(self, residual_layer_idx, ):
+            self.layer_outs[name] = output
+            self.last_name = name
+            
+            
+    def residual_layer(self, 
+                       residual_layer_idx, ):
             
         inputs = self.layer_outs[-1]
         residues = self.layer_out[residual_layer_idx]
@@ -278,7 +288,8 @@ class tfgraph(object):
             output = inputs + residues
             output = activation(output)
             self.layer_outs.append(output)
-        
+            self.last_name = name
+            
         
     def initialise(self):
         with self.graph:
