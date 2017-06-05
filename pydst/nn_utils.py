@@ -27,25 +27,20 @@ def ff_layer(inputs, szparams, nonlin=tf.nn.relu, batchNorm=False, keepProb=1):
     :returns output: Output tensor of layer with transformations.
             -- Affine, (batch), non-linearity, (Dropout) --
     """
-    # TODO: transform function that szparams is only the output parameter
-    weights = tf.Variable(tf.truncated_normal([szparams[0], szparams[1]], stddev=glorot_std(szparams)), name='weights')
-    biases = tf.Variable(tf.zeros([szparams[1]]), name='biases')
-    
-    affine_output = tf.matmul(inputs, weights) + biases
-    
-    if batchNorm:
-        
-        epsilon = 0.001
-        gamma = tf.Variable(tf.ones([szparams[1]]), name='scale')
-        beta = tf.Variable(tf.zeros([szparams[1]]), name='shift')
-        mean, var = tf.nn.moments(affine_output, axes=[0], name='moments')
-        affine_output = tf.nn.batch_normalization(affine_output, mean, var, beta, gamma,
-                                                  epsilon, name='batch_normalization')
-
-    output = nonlin(affine_output)
-    
-    if keepProb != 1:
-        output = tf.nn.dropout(output, keepProb)
+    dense(
+    inputs,
+    units,
+    activation=None,
+    use_bias=True,
+    kernel_initializer=None,
+    bias_initializer=tf.zeros_initializer(),
+    kernel_regularizer=None,
+    bias_regularizer=None,
+    activity_regularizer=None,
+    trainable=True,
+    name=None,
+    reuse=None
+)
     return output
 
 
@@ -79,42 +74,224 @@ class tfgraph(object):
         self.layer_outs = []
 
 
-    def add_ffl(self, inputs, outsize, nonlin=tf.nn.relu, batchNorm=False, keepProb):
+    def add_ffl(self,
+                inputs,
+                units,
+                activation=None,
+                use_bias=True,
+                kernel_initializer=None,
+                bias_initializer=tf.zeros_initializer(),
+                kernel_regularizer=None,
+                bias_regularizer=None,
+                activity_regularizer=None,
+                trainable=True,
+                name=None,
+                reuse=None
+               ):
+        """Function to add a single fully connected layer to the graph.
+
+        :param inputs: 
+               
+        """
         with self.graph:
-            output = tf.layers.dense()
-            #output = ff_layer(inputs, outsize, nonlin, batchNorm, keepProb)
-        self.layer_outs.append(output)
+            output = tf.layers.dense(inputs,
+                                     units,
+                                     activation=None,
+                                     use_bias=True,
+                                     kernel_initializer=None,
+                                     bias_initializer=tf.zeros_initializer(),
+                                     kernel_regularizer=None,
+                                     bias_regularizer=None,
+                                     activity_regularizer=None,
+                                     trainable=True,
+                                     name=None,
+                                     reuse=None
+                                    )
+            self.layer_outs.append(output)
 
-    def add_conv1l(self, inputs, outsize, kersize, nonlin=tf.nn.relu, batchNorm=False, keepProb=1, padding, dilution):
+            
+    def add_conv1l(self,
+                   inputs,
+                   filters,
+                   kernel_size,
+                   strides=1,
+                   padding='valid',
+                   data_format='channels_last',
+                   dilation_rate=1,
+                   activation=None,
+                   use_bias=True,
+                   kernel_initializer=None,
+                   bias_initializer=tf.zeros_initializer(),
+                   kernel_regularizer=None,
+                   bias_regularizer=None,
+                   activity_regularizer=None,
+                   trainable=True,
+                   name=None,
+                   reuse=None
+                  ):
+        """Function to add a conv1d layer to the graph.
+
+        :param inputs: 
+               
+        """       
         with self.graph:
-            output = tf.layers.conv1d() # TODO
-            #output = conv1_layer(inputs, outsize, kersize, nonlin, stride, batchNorm, keepProb, padding, dilution)   
-        self.layer_outs.append(output)
+            output = tf.layers.conv1d(inputs,
+                                      filters,
+                                      kernel_size,
+                                      strides=1,
+                                      padding='valid',
+                                      data_format='channels_last',
+                                      dilation_rate=1,
+                                      activation=None,
+                                      use_bias=True,
+                                      kernel_initializer=None,
+                                      bias_initializer=tf.zeros_initializer(),
+                                      kernel_regularizer=None,
+                                      bias_regularizer=None,
+                                      activity_regularizer=None,
+                                      trainable=True,
+                                      name=None,
+                                      reuse=None
+                                     )  
+            self.layer_outs.append(output)
 
 
-    def add_conv2l(self, inputs, outsize, kersize, nonlin=tf.nn.relu, batchNorm=False, keepProb=1, padding, dilution):
+    def add_conv2l(self,  
+                   inputs,
+                   filters,
+                   kernel_size,
+                   strides=(1, 1),
+                   padding='valid',
+                   data_format='channels_last',
+                   dilation_rate=(1, 1),
+                   activation=None,
+                   use_bias=True,
+                   kernel_initializer=None,
+                   bias_initializer=tf.zeros_initializer(),
+                   kernel_regularizer=None,
+                   bias_regularizer=None,
+                   activity_regularizer=None,
+                   trainable=True,
+                   name=None,
+                   reuse=None
+                  ):
+        """Function to add a conv2d layer to the graph.
+
+        :param inputs: 
+               
+        """    
         with self.graph:
-            output = tf.layers.conv2d() # TODO
-            #output = conv2_layer(inputs, outsize, kersize, nonlin, stride, batchNorm, keepProb, padding, dilution)
-        self.layer_outs.append(output)
+            output = tf.layers.conv2d(inputs,
+                                      filters,
+                                      kernel_size,
+                                      strides=(1, 1),
+                                      padding='valid',
+                                      data_format='channels_last',
+                                      dilation_rate=(1, 1),
+                                      activation=None,
+                                      use_bias=True,
+                                      kernel_initializer=None,
+                                      bias_initializer=tf.zeros_initializer(),
+                                      kernel_regularizer=None,
+                                      bias_regularizer=None,
+                                      activity_regularizer=None,
+                                      trainable=True,
+                                      name=None,
+                                      reuse=None
+                                     )
+            self.layer_outs.append(output)
 
 
-    def add_maxpool(self, inputs, div, padding="SAME"):
+    def add_maxpool1(self, 
+                    inputs,
+                    pool_size,
+                    strides,
+                    padding='valid',
+                    data_format='channels_last',
+                    name=None
+                   ):
+        """Function to add a maxpool layer to the graph.
+
+        :param inputs: 
+               
+        """
         with self.graph:
-            output = maxpool_layer(inputs, div, padding)
-        self.layer_outs.append(output)
+            output = tf.layers.max_pooling1d(inputs,
+                                         pool_size,
+                                         strides,
+                                         padding='valid',
+                                         data_format='channels_last',
+                                         name=None
+                                        )
+            self.layer_outs.append(output)
 
+            
+    def add_avgpool1(self,
+                     inputs,
+                     pool_size,
+                     strides,
+                     padding='valid',
+                     data_format='channels_last',
+                     name=None
+                    ):
+        """Function to add a avg pool layer to the graph.
 
-    def add_avgpool(self, inputs, div, padding="SAME"):	
+        :param inputs: 
+               
+        """
         with self.graph:
-            output = avgpool_layer(inputs, div, padding)
-        self.layer_outs.append(output)
+            output = tf.layers.average_pooling1d(inputs,
+                                                 pool_size,
+                                                 strides,
+                                                 padding='valid',
+                                                 data_format='channels_last',
+                                                 name=None
+                                                )
+            self.layer_outs.append(output)
 
 
-    def add_batchnorm(self):
+    def add_batchnorm(self,
+                      inputs,
+                      axis=-1,
+                      momentum=0.99,
+                      epsilon=0.001,
+                      center=True,
+                      scale=True,
+                      beta_initializer=tf.zeros_initializer(),
+                      gamma_initializer=tf.ones_initializer(),
+                      moving_mean_initializer=tf.zeros_initializer(),
+                      moving_variance_initializer=tf.ones_initializer(),
+                      beta_regularizer=None,
+                      gamma_regularizer=None,
+                      training=False,
+                      trainable=True,
+                      name=None,
+                      reuse=None
+                     ):
+        """Function to add a batch normalization layer to the graph.
+
+        :param inputs: 
+               
+        """
         with self.graph:
-            output = batch_norm(inputs):
-        self.layer_outs.append(output)
+            output = tf.layers.batch_normalization(inputs,
+                                                   axis=-1,
+                                                   momentum=0.99,
+                                                   epsilon=0.001,
+                                                   center=True,
+                                                   scale=True,
+                                                   beta_initializer=tf.zeros_initializer(),
+                                                   gamma_initializer=tf.ones_initializer(),
+                                                   moving_mean_initializer=tf.zeros_initializer(),
+                                                   moving_variance_initializer=tf.ones_initializer(),
+                                                   beta_regularizer=None,
+                                                   gamma_regularizer=None,
+                                                   training=False,
+                                                   trainable=True,
+                                                   name=None,
+                                                   reuse=None
+                                                  ):
+            self.layer_outs.append(output)
 
 
     def initialise(self):
