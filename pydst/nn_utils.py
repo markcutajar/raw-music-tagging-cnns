@@ -15,7 +15,7 @@ def glorot_std(params):
     return (2./(params[0]+params[1]))**0.5
 
 
-def fully_connected_layer(inputs, szparams, nonlin=tf.nn.relu, batchNorm=False, keepProb=1):
+def ff_layer(inputs, szparams, nonlin=tf.nn.relu, batchNorm=False, keepProb=1):
     """Function to construct a single fully connected layer.
     
     :param inputs: Input tensor.
@@ -49,47 +49,9 @@ def fully_connected_layer(inputs, szparams, nonlin=tf.nn.relu, batchNorm=False, 
     return output
 
 
-def fc_layer_batch(inputs, szparams, nonlin=tf.nn.relu, batchNorm=False, keepProb=1):
-    """Function to construct numerous feed forward layers.
+def add_conv1l(inputs, filters, kernel_size, strides=1, padding='valid', dilation_rate=1, activation=tf.nn.relu, kernel_initializer=None, bias_initializer=tf.zeros_initializer(), kernel_regulizer=None, bias_regularizer=None, activity_regularizer=None, trainable=True, name=None, reuse=None, batch_norm=False, ):
     
-    Given arrays of sizes, non-linearities, batch normalization
-    booleans and keep wieght probabilities; numerous layers are
-    constructed.
-    
-    :param inputs: Input tensor.
-    :param szparams: List with the inputs and outputs of the layers.
-    :param nonlin: List of the non-linearities of the different
-            layers. If a single non-linearity is given, this is 
-            transformed into a list.
-    :param batchNorm: List of batch normalizaton booleans. If a
-            single boolean is given this is transformed into a
-            list.
-    :param keepProb: List of keep probabilities. If a single boolean
-            is given this is transformed into a list.
-        :returns layer_outs: A list with the outputs of each of the layers.
-    """
-    layer_outs = []
-    
-    if not isinstance(nonlin, list):
-        nonlin = [nonlin]*len(szparams)
-    if not isinstance(batchNorm, list):
-        batchNorm = [batchNorm]*len(szparams)
-    if not isinstance(keepProb, list):
-        keepProb = [keepProb]*len(szparams)
-    
-    din = inputs
-    for lidx, sz in enumerate(szparams):
-        if lidx != 0:
-            din = layer_outs[-1]
-            
-        with tf.name_scope('fc-layer-{0}'.format(lidx)):
-            lout = fully_connected_layer(din, sz, nonlin=nonlin[lidx], batchNorm=batchNorm, keepProb=keepProb)
-            layer_outs.append(lout)
-            
-    return layer_outs
-
-
-def define_summaries(scalar_sd = None, histogram_sd = None, image_sd = None ):
+def add_conv2l():
 
 
 
@@ -103,10 +65,13 @@ def maxpool_layer(inputs, div=(2,2)):
     """
     return tf.nn.max_pool(inputs, ksize=[1, div[0], div[1], 1], strides=[1, div[0], div[1], 1], padding='SAME')
 
+def avgpool_layer():
 
+def batch_norm():
+    
 
-
-
+    
+    
 class tfgraph(object):
 
     def __init__(self, graph):
@@ -116,36 +81,39 @@ class tfgraph(object):
 
     def add_ffl(self, inputs, outsize, nonlin=tf.nn.relu, batchNorm=False, keepProb):
         with self.graph:
-            output = ff_layer(inputs, outsize, nonlin, batchNorm, keepProb)
+            output = tf.layers.dense()
+            #output = ff_layer(inputs, outsize, nonlin, batchNorm, keepProb)
         self.layer_outs.append(output)
 
     def add_conv1l(self, inputs, outsize, kersize, nonlin=tf.nn.relu, batchNorm=False, keepProb=1, padding, dilution):
         with self.graph:
-            output = conv1_layer(inputs, outsize, kersize, nonlin, stride, batchNorm, keepProb, padding, dilution)   
+            output = tf.layers.conv1d() # TODO
+            #output = conv1_layer(inputs, outsize, kersize, nonlin, stride, batchNorm, keepProb, padding, dilution)   
         self.layer_outs.append(output)
 
 
     def add_conv2l(self, inputs, outsize, kersize, nonlin=tf.nn.relu, batchNorm=False, keepProb=1, padding, dilution):
         with self.graph:
-            output = conv2_layer(inputs, outsize, kersize, nonlin, stride, batchNorm, keepProb, padding, dilution)
+            output = tf.layers.conv2d() # TODO
+            #output = conv2_layer(inputs, outsize, kersize, nonlin, stride, batchNorm, keepProb, padding, dilution)
         self.layer_outs.append(output)
 
 
     def add_maxpool(self, inputs, div, padding="SAME"):
         with self.graph:
-            output = maxpool(inputs, div, padding)
+            output = maxpool_layer(inputs, div, padding)
         self.layer_outs.append(output)
 
 
     def add_avgpool(self, inputs, div, padding="SAME"):	
         with self.graph:
-            output = avgpool(inputs, div, padding)
+            output = avgpool_layer(inputs, div, padding)
         self.layer_outs.append(output)
 
 
     def add_batchnorm(self):
         with self.graph:
-            output = batchNorm(inputs):
+            output = batch_norm(inputs):
         self.layer_outs.append(output)
 
 
@@ -185,6 +153,7 @@ class tfgraph(object):
             merged = tf.summary.merge_all()
         return merged
 
+    
     def train(self, train_set, eval_set, ):
         # train function
 
@@ -206,3 +175,46 @@ class tfgraph(object):
 
     def test_graph(self, test_set_provider, results=['confusion'])
         # test graph with unseen dataset
+        
+
+        
+        
+        
+def fc_layer_batch(inputs, szparams, nonlin=tf.nn.relu, batchNorm=False, keepProb=1):
+    """Function to construct numerous feed forward layers.
+    
+    Given arrays of sizes, non-linearities, batch normalization
+    booleans and keep wieght probabilities; numerous layers are
+    constructed.
+    
+    :param inputs: Input tensor.
+    :param szparams: List with the inputs and outputs of the layers.
+    :param nonlin: List of the non-linearities of the different
+            layers. If a single non-linearity is given, this is 
+            transformed into a list.
+    :param batchNorm: List of batch normalizaton booleans. If a
+            single boolean is given this is transformed into a
+            list.
+    :param keepProb: List of keep probabilities. If a single boolean
+            is given this is transformed into a list.
+        :returns layer_outs: A list with the outputs of each of the layers.
+    """
+    layer_outs = []
+    
+    if not isinstance(nonlin, list):
+        nonlin = [nonlin]*len(szparams)
+    if not isinstance(batchNorm, list):
+        batchNorm = [batchNorm]*len(szparams)
+    if not isinstance(keepProb, list):
+        keepProb = [keepProb]*len(szparams)
+    
+    din = inputs
+    for lidx, sz in enumerate(szparams):
+        if lidx != 0:
+            din = layer_outs[-1]
+            
+        with tf.name_scope('fc-layer-{0}'.format(lidx)):
+            lout = ff_layer(din, sz, nonlin=nonlin[lidx], batchNorm=batchNorm, keepProb=keepProb)
+            layer_outs.append(lout)
+            
+    return layer_outs
