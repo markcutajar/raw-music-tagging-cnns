@@ -395,7 +395,7 @@ def glorot_std(params):
     def train(self, data_provider, pre_processor=None, error_name, accuracy_name, epochs):
         """Function to train the graph.
         
-        Please note that this function gets information by an iterable
+        Please note that this function gets information by an iterable.
         
         :param inputs
         """
@@ -426,6 +426,67 @@ def glorot_std(params):
             measured_accs.append(run_acc)
         
         return measured_errors, measured_accs
+    
+    
+    def train_eval(self, train_data, valid_data, pre_processor=None, error_name, accuracy_name, epochs=100, valid_step=10):
+        """Function to train and evaluate the graph.
+        
+        Please note that this function gets information by an iterable.
+        
+        :param inputs
+        """
+        train_errors = []
+        train_accs = []
+        valid_errors = []
+        valid_accs = []
+        
+        for epoch in range(epochs): 
+            
+            run_error = 0.
+            run_acc = 0.
+            
+            for input_batch, target_batch in train_data:
+                
+                if preprocessor is not None:
+                    input_batch = preprocessor(input_batch)
+                    
+                [_, batch_error, accuracy_error] = sess.run(
+                    [train_step, self.errors[error_name], self.accuracies[accuracy_name]],
+                    feed_dict={inputs: input_batch, targets: target_batch})
+                
+                run_error += batch_error
+                run_acc += batch_acc
+                
+            run_error /= provider.batch_size
+            run_acc /= provider.batch_size
+            
+            train_errors.append(run_error)
+            train_accs.append(run_acc)
+            
+            if (epoch + 1) % valid_step == 0:
+                
+                run_error = 0.
+                run_acc = 0.
+
+                for input_batch, target_batch in valid_data:
+
+                    if preprocessor is not None:
+                        input_batch = preprocessor(input_batch)
+
+                    [batch_error, accuracy_error] = sess.run(
+                        [self.errors[error_name], self.accuracies[accuracy_name]],
+                        feed_dict={inputs: input_batch, targets: target_batch})
+
+                    run_error += batch_error
+                    run_acc += batch_acc
+
+                run_error /= provider.batch_size
+                run_acc /= provider.batch_size
+
+                valid_errors.append(run_error)
+                valid_accs.append(run_acc)
+
+        return train_errors, train_accs, valid_errors, valid_accs
     
     
     def add_summary(self, name, value, stype):
