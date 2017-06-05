@@ -5,7 +5,7 @@ This module provides utilities classes that are handy in neural network construc
 """
 
 import tensorflow as tf
-
+import numpy as np
 
 def glorot_std(params):
     """Function to return the STD    
@@ -15,57 +15,6 @@ def glorot_std(params):
     return (2./(params[0]+params[1]))**0.5
 
 
-def ff_layer(inputs, szparams, nonlin=tf.nn.relu, batchNorm=False, keepProb=1):
-    """Function to construct a single fully connected layer.
-    
-    :param inputs: Input tensor.
-    :param szparams: Input and output sizes in a tuple.
-    :param nonlin: Non-linearity to be used. Default is RELU.
-    :param batchNorm: Boolean to apply batch normalization
-    :param keepProb: Probability to keep a certain weight to be 
-            used in the dropout function.
-    :returns output: Output tensor of layer with transformations.
-            -- Affine, (batch), non-linearity, (Dropout) --
-    """
-    dense(
-    inputs,
-    units,
-    activation=None,
-    use_bias=True,
-    kernel_initializer=None,
-    bias_initializer=tf.zeros_initializer(),
-    kernel_regularizer=None,
-    bias_regularizer=None,
-    activity_regularizer=None,
-    trainable=True,
-    name=None,
-    reuse=None
-)
-    return output
-
-
-def add_conv1l(inputs, filters, kernel_size, strides=1, padding='valid', dilation_rate=1, activation=tf.nn.relu, kernel_initializer=None, bias_initializer=tf.zeros_initializer(), kernel_regulizer=None, bias_regularizer=None, activity_regularizer=None, trainable=True, name=None, reuse=None, batch_norm=False, ):
-    
-def add_conv2l():
-
-
-
-# TODO: Check function on the tensorflow API documentation
-def maxpool_layer(inputs, div=(2,2)):
-    """Function to perform max-pooling on the provided inputs
-    
-    :param inputs: Input tensor.
-    :param div: Check on the tensorflow API documentation to understand the difference between ksize and strides 
-    :return: Max-pooled layer.
-    """
-    return tf.nn.max_pool(inputs, ksize=[1, div[0], div[1], 1], strides=[1, div[0], div[1], 1], padding='SAME')
-
-def avgpool_layer():
-
-def batch_norm():
-    
-
-    
     
 class tfgraph(object):
 
@@ -294,6 +243,43 @@ class tfgraph(object):
             self.layer_outs.append(output)
 
 
+    def add_dropout(inputs,
+                    rate=0.5,
+                    noise_shape=None,
+                    seed=None,
+                    training=False,
+                    name=None
+                   ):
+        """Function to add a dropout layer to the graph.
+
+        :param inputs: 
+               
+        """
+        with self.graph:
+            output = tf.layers.dropout(inputs,
+                                       rate=0.5,
+                                       noise_shape=None,
+                                       seed=None,
+                                       training=False,
+                                       name=None
+                                      )
+            self.layer_outs.append(output)
+        
+    def residual_layer(self, residual_layer_idx, ):
+            
+        inputs = self.layer_outs[-1]
+        residues = self.layer_out[residual_layer_idx]
+        
+        if inputs.shape != residues.shape:
+            raise ValueError('Inputs {} and residues {} must have the same dimension for residual layer'
+                            .format(inputs.shape, residues.shape))
+       
+        with self.graph:  
+            output = inputs + residues
+            output = activation(output)
+            self.layer_outs.append(output)
+        
+        
     def initialise(self):
         with self.graph:
             # initialise
