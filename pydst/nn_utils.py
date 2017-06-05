@@ -7,14 +7,6 @@ This module provides utilities classes that are handy in neural network construc
 import tensorflow as tf
 import numpy as np
 
-def glorot_std(params):
-    """Function to return the STD    
-    :param params: The input and output layer sizes.
-    :returns Standard deviation according to Glorot and Bengio.
-    """
-    return (2./(params[0]+params[1]))**0.5
-
-
     
 class tfgraph(object):
 
@@ -41,6 +33,12 @@ class tfgraph(object):
             self.accuracies = {}
         
             self.session = sess
+def glorot_std(params):
+    """Function to return the STD    
+    :param params: The input and output layer sizes.
+    :returns Standard deviation according to Glorot and Bengio.
+    """
+    return (2./(params[0]+params[1]))**0.5
     
     
     def add_ffl(self,
@@ -465,7 +463,7 @@ class tfgraph(object):
     def save_model(self, path):
         with self.session:
             model_saver = tf.train.Saver()
-            model_saver.save(self.session, path)
+            model_saver.save(self.session, path)        
             model_saver.export_meta_graph(path + '.meta')
 
 
@@ -476,9 +474,11 @@ class tfgraph(object):
 
     
     def single_test(self, single_sample, sample_targets):
-        """Function to return outputs of certain songs.
-        
-        """
+        """Function test on a single instance and return different layer outputs.
+
+        :param inputs: 
+               
+        """ 
         name_list, value_list = []
         with self.graph:
             for key, value in self.layer_outs.iteritems():
