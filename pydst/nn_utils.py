@@ -18,18 +18,30 @@ def glorot_std(params):
     
 class tfgraph(object):
 
-    def __init__(self, graph, inputs, targets, sess, input_layer_name):
-        self.graph=graph
-     
-        self.layer_outs = {}
-        self.layer_outs[input_layer_name] = inputs
-        self.last_name = input_layer_name
-        self.targets = targets
+    def __init__(self, graph, sess, inputs_size, targets_size, input_layer_name, targets_name):
+        """Create new tfgraph object.
         
-        self.errors = {}
-        self.accuracies = {}
+        Explain
+        :param
+        """
+        self.graph = graph
+        with self.graph:
+            with tf.name_scope('inputs and targets placeholders'):
+                
+                inputs = tf.placeholder(tf.float32, inputs_size, 'inputs')
+                targets = tf.placeholder(tf.float32, targets_size, 'targets')
+            
+            self.layer_outs = {}
+            self.layer_outs[input_layer_name] = inputs
+            self.targets = targets
+            
+            self.last_name = input_layer_name
+
+            self.errors = {}
+            self.accuracies = {}
         
-        self.session = sess
+            self.session = sess
+    
     
     def add_ffl(self,
                 units,
@@ -361,7 +373,7 @@ class tfgraph(object):
                                                         scope=None,
                                                         loss_collection=tf.GraphKeys.LOSSES
                                                        )
-        self.errors[name] = error
+            self.errors[name] = error
     
     
     def get_error(self, name):
@@ -370,15 +382,54 @@ class tfgraph(object):
     
     
     def set_train(self, optimizer=tf.train.AdamOptimizer(), name_error):
-        with self.graph('train-' + name_error)
-        self.train_step = optimizer.minimize(self.error)
+        """Set train function."""
+        with self.graph:
+            with tf.name_scope('train-' + name_error):
+                train_step = optimizer.minimize(self.error)
         
         
     def initialise(self):
+        """Initialise graph variables."""
         with self.graph:
             self.session.run(tf.global_variables_initializer())
             
             
+    def train(self, data_provider, pre_processor=None, error_name, accuracy_name, epochs):
+        """Function to train the graph.
+        
+        Please note that this function gets information by an iterable
+        
+        :param inputs
+        """
+        measured_errors = []
+        measured_accs = []
+        
+        for epoch in range(epochs): 
+            
+            run_error = 0.
+            run_acc = 0.
+            
+            for input_batch, target_batch in data_provider:
+                
+                if preprocessor is not None:
+                    input_batch = preprocessor(input_batch)
+                    
+                [train_steps, batch_error, accuracy_error] = sess.run(
+                    [_, self.errors[error_name], self.accuracies[accuracy_name]],
+                    feed_dict={inputs: input_batch, targets: target_batch})
+                
+                run_error += batch_error
+                run_acc += batch_acc
+                
+            run_error /= provider.batch_size
+            run_acc /= provider.batch_size
+            
+            measured_errors.append(run_error)
+            measured_accs.append(run_acc)
+        
+        return measured_errors, measured_accs
+    
+    
     def add_summary(self, name, value, stype):
         """Function to define summary
     
@@ -411,24 +462,38 @@ class tfgraph(object):
         return merged
 
     
-    def train(self, train_set, eval_set, ):
-        # train function
+    def save_model(self, path):
+        with self.session:
+            model_saver = tf.train.Saver()
+            model_saver.save(self.session, path)
+            model_saver.export_meta_graph(path + '.meta')
 
 
-    def save_model(self):
-        # save model
-
-
-    def load_model(self):
-        # load model
+    def load_model(self, path):
+        with self.session:
+            model_loader = tf.train.import_meta_graph(path + '.meta')
+            model_loader.restore(self.session, path)
 
     
-    def save_layers_wav(self):
-        # save layers wave
-
-    def sound_layer(self, layer_num):
-        # convert layer to wav
-        # play wav file
-
-    def test_graph(self, test_set_provider, results=['confusion'])
-        # test graph with unseen dataset
+    def single_test(self, single_sample, sample_targets):
+        """Function to return outputs of certain songs.
+        
+        """
+        name_list, value_list = []
+        with self.graph:
+            for key, value in self.layer_outs.iteritems():
+                name_list.append(key)
+                value_list.append(value)
+            
+            for key, value in self.errors.iteritems():
+                name_list.append(key)
+                value_list.append(value)
+                
+            for key, value in self.accuracies.iteritems():
+                name_list.append(key)
+                value_list.append(value)
+            
+            values = self.session.run(value_list, feed_dict={inputs: single_sample, targets: sample_targets})
+            layer_out_dict = dict(zip(name_list, values))
+        
+        return layer_out_dict
