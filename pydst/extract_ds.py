@@ -5,6 +5,8 @@ This function can be used as both a standalone function
 or imported in a different class.
 """
 
+import io
+import os
 import csv
 import logging
 import numpy as np
@@ -41,18 +43,16 @@ def extract_tags_names(root):
     # Open file and store the information in the appropriate lists
     filename = root + 'annotations_final.csv'
     try:
-        with open(filename, newline='') as f:
-                annotations_file = csv.reader(f, delimiter='\t')
-
-                for idx, row in enumerate(annotations_file):
-                    if idx == 0:
-                        targets_to_labels = row
-                        del(targets_to_labels[0], targets_to_labels[-1])
-                    else:
-
-                        tids.append(row[0])
-                        mp3_files.append(row[-1])
-                        targets.append([float(i) for i in row[1:-1]])
+        with io.open(filename, newline='') as f: 
+            annotations_file = csv.reader(f, delimiter='\t')
+	    for idx, row in enumerate(annotations_file):
+	        if idx == 0:
+	            targets_to_labels = row
+	            del(targets_to_labels[0], targets_to_labels[-1])
+	        else:
+	            tids.append(row[0])
+	            mp3_files.append(row[-1])
+	            targets.append([float(i) for i in row[1:-1]])
     except:
         err_str = "File: {0} missing.".format(filename)
         logger.error(err_str)
@@ -154,8 +154,8 @@ def seperate_merge(targets, mp3_files, tids, split):
     :return test_data: Dictionary with the test data.
     """
     size_of_dataset = targets.shape[0]
-    test_sz, valid_sz, train_sz = round(size_of_dataset * split[2]), round(size_of_dataset * split[1]), round(
-        size_of_dataset * split[0])
+    test_sz, valid_sz, train_sz = int(round(size_of_dataset * split[2])), int(round(size_of_dataset * split[1])), int(round(
+        size_of_dataset * split[0]))
 
     trn_tgts, trn_mp3f, trn_tids = targets[0:train_sz], mp3_files[0:train_sz], tids[0:train_sz]
 
@@ -236,10 +236,11 @@ def save_archives(train_md, valid_md, test_md, lmap):
 
 if __name__ == "__main__":
     # Extract the dataset
-    dataset_folder = "magnatagatune/"
+    cwd = os.getcwd()
+    dataset_folder = cwd+"/magnatagatune/"
     rndState = np.random.RandomState(DEFAULT_SEED)
     size_of_sets = -1
-    down_sampling = 1
+    down_sampling = 10
     divisions = [0.7, 0.1, 0.2]
     [trndata, vlddata, tstdata, label_map] = get_dataset(rndState, dataset_folder, divisions, _size_of=size_of_sets,
                                                          _down_sampling_window=down_sampling)
