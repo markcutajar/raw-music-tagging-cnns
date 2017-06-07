@@ -116,6 +116,7 @@ class DataProvider(object):
     
     def enable(self, sess, num_threads=1):
         threads = []
+        self.shuffle()
         for idx in range(num_threads):
             thread = threading.Thread(target=self.load_q, args=(sess,))
             thread.daemon = True
@@ -133,7 +134,6 @@ class DataProvider(object):
             sess.run(self.q.close(cancel_pending_enqueues=True))
             self.coord.request_stop()
             self.coord.join(self.thread_runners)
-        
     
     def load_q(self, sess):
         """Function to enqueue data in the object queue
