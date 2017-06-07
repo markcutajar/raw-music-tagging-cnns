@@ -10,7 +10,7 @@ import numpy as np
     
 class tfgraph(object):
 
-    def __init__(self, graph, sess, inputs_size, targets_size, input_layer_name, targets_name):
+    def __init__(self, graph, inputs_ph, targets_ph, input_layer_name, targets_name):
         """Create new tfgraph object.
         
         Explain
@@ -19,21 +19,15 @@ class tfgraph(object):
         self.graph = graph
         
         with self.graph.as_default():
-            with tf.name_scope('placeholders'):
-                
-                inputs = tf.placeholder(tf.float32, inputs_size, 'inputs')
-                targets = tf.placeholder(tf.float32, targets_size, 'targets')
             
             self.layer_outs = {}
-            self.layer_outs[input_layer_name] = inputs
-            self.targets = targets
+            self.layer_outs[input_layer_name] = inputs_ph
+            self.targets = targets_ph
             
             self.last_name = input_layer_name
 
             self.errors = {}
             self.accuracies = {}
-        
-            self.session = sess
        
     
     def add_ffl(self,
@@ -381,13 +375,13 @@ class tfgraph(object):
                 train_step = optimizer.minimize(self.error)
         
         
-    def initialise(self):
+    def initialise(self, sess):
         """Initialise graph variables."""
         with self.graph.as_default():
-            self.session.run(tf.global_variables_initializer())
+            sess.run(tf.global_variables_initializer())
             
             
-    def train(self, train_data, error_name, accuracy_name, preprocessor=None, epochs=100):
+    def train(self, sess, train_data, error_name, accuracy_name, preprocessor=None, epochs=100):
         """Function to train the graph.
         
         Please note that this function gets information by an iterable.
@@ -425,7 +419,7 @@ class tfgraph(object):
         return measured_errors, measured_accs
     
     
-    def train_eval(self, train_data, valid_data, error_name, accuracy_name, preprocessor=None, epochs=100, valid_step=10):
+    def train_eval(self, sess, train_data, valid_data, error_name, accuracy_name, preprocessor=None, epochs=100, valid_step=10):
         """Function to train and evaluate the graph.
         
         Please note that this function gets information by an iterable.
@@ -520,22 +514,22 @@ class tfgraph(object):
         return merged
 
     
-    def save_model(self, path):
+    def save_model(self, sess, path):
         with self.graph.as_default():
-            with self.session:
+            with sess:
                 model_saver = tf.train.Saver()
-                model_saver.save(self.session, path)        
+                model_saver.save(sess, path)        
                 model_saver.export_meta_graph(path + '.meta')
 
 
-    def load_model(self, path):
+    def load_model(self, sess, path):
         with self.graph.as_default():
-            with self.session:
+            with sess:
                 model_loader = tf.train.import_meta_graph(path + '.meta')
-                model_loader.restore(self.session, path)
+                model_loader.restore(sess, path)
 
     
-    def single_test(self, single_sample, sample_targets):
+    def single_test(self, sess, single_sample, sample_targets):
         """Function test on a single instance and return different layer outputs.
 
         :param inputs: 
@@ -555,7 +549,18 @@ class tfgraph(object):
                 name_list.append(key)
                 value_list.append(value)
             
-            values = self.session.run(value_list, feed_dict={inputs: single_sample, targets: sample_targets})
+            values = sess.run(value_list, feed_dict={inputs: single_sample, targets: sample_targets})
             layer_out_dict = dict(zip(name_list, values))
         
         return layer_out_dict
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
