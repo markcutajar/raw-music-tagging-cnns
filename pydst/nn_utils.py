@@ -373,114 +373,7 @@ class tfgraph(object):
         with self.graph.as_default():
             with tf.name_scope('train-' + name_error):
                 train_step = optimizer.minimize(self.error)
-        
-        
-    def initialise(self, sess):
-        """Initialise graph variables."""
-        with self.graph.as_default():
-            sess.run(tf.global_variables_initializer())
-            
-            
-    def train(self, sess, train_data, error_name, accuracy_name, preprocessor=None, epochs=100):
-        """Function to train the graph.
-        
-        Please note that this function gets information by an iterable.
-        
-        :param inputs
-        """
-        measured_errors = []
-        measured_accs = []
-        
-        with self.graph.as_default():
-        
-            for epoch in range(epochs): 
-
-                run_error = 0.
-                run_acc = 0.
-
-                for input_batch, target_batch in train_data:
-
-                    if preprocessor is not None:
-                        input_batch = preprocessor(input_batch)
-
-                    [train_steps, batch_error, accuracy_error] = sess.run(
-                        [_, self.errors[error_name], self.accuracies[accuracy_name]],
-                        feed_dict={inputs: input_batch, targets: target_batch})
-
-                    run_error += batch_error
-                    run_acc += batch_acc
-
-                run_error /= provider.batch_size
-                run_acc /= provider.batch_size
-
-                measured_errors.append(run_error)
-                measured_accs.append(run_acc)
-        
-        return measured_errors, measured_accs
-    
-    
-    def train_eval(self, sess, train_data, valid_data, error_name, accuracy_name, preprocessor=None, epochs=100, valid_step=10):
-        """Function to train and evaluate the graph.
-        
-        Please note that this function gets information by an iterable.
-        
-        :param inputs
-        """
-        train_errors = []
-        train_accs = []
-        valid_errors = []
-        valid_accs = []
-        
-        with self.graph.as_default():
-        
-            for epoch in range(epochs): 
-
-                run_error = 0.
-                run_acc = 0.
-
-                for input_batch, target_batch in train_data:
-
-                    if preprocessor is not None:
-                        input_batch = preprocessor(input_batch)
-
-                    [_, batch_error, accuracy_error] = sess.run(
-                        [train_step, self.errors[error_name], self.accuracies[accuracy_name]],
-                        feed_dict={inputs: input_batch, targets: target_batch})
-
-                    run_error += batch_error
-                    run_acc += batch_acc
-
-                run_error /= provider.batch_size
-                run_acc /= provider.batch_size
-
-                train_errors.append(run_error)
-                train_accs.append(run_acc)
-
-                if (epoch + 1) % valid_step == 0:
-
-                    run_error = 0.
-                    run_acc = 0.
-
-                    for input_batch, target_batch in valid_data:
-
-                        if preprocessor is not None:
-                            input_batch = preprocessor(input_batch)
-
-                        [batch_error, accuracy_error] = sess.run(
-                            [self.errors[error_name], self.accuracies[accuracy_name]],
-                            feed_dict={inputs: input_batch, targets: target_batch})
-
-                        run_error += batch_error
-                        run_acc += batch_acc
-
-                    run_error /= provider.batch_size
-                    run_acc /= provider.batch_size
-
-                    valid_errors.append(run_error)
-                    valid_accs.append(run_acc)
-
-        return train_errors, train_accs, valid_errors, valid_accs
-    
+      
     
     def add_summary(self, name, value, stype):
         """Function to define summary
@@ -527,32 +420,53 @@ class tfgraph(object):
             with sess:
                 model_loader = tf.train.import_meta_graph(path + '.meta')
                 model_loader.restore(sess, path)
-
     
-    def single_test(self, sess, single_sample, sample_targets):
-        """Function test on a single instance and return different layer outputs.
-
-        :param inputs: 
-               
-        """ 
-        name_list, value_list = []
-        with self.graph.as_default():
-            for key, value in self.layer_outs.iteritems():
-                name_list.append(key)
-                value_list.append(value)
-            
-            for key, value in self.errors.iteritems():
-                name_list.append(key)
-                value_list.append(value)
-                
-            for key, value in self.accuracies.iteritems():
-                name_list.append(key)
-                value_list.append(value)
-            
-            values = sess.run(value_list, feed_dict={inputs: single_sample, targets: sample_targets})
-            layer_out_dict = dict(zip(name_list, values))
+    
+    
         
-        return layer_out_dict
+    def initialise(self, sess):
+        """Initialise graph variables."""
+        with self.graph.as_default():
+            sess.run(tf.global_variables_initializer())
+            
+            
+def train(graph, sess, provider, error_name, accuracy_name, epochs=100):
+    """Function to train the graph.
+      
+    Please note that this function gets information by an iterable.
+      
+    :param inputs
+    """
+    measured_errors = []
+    measured_accs = []
+    
+    epoch_iterations = provider.max_num_batches()
+    
+    with graph.as_default():
+      
+        for epoch in range(epochs): 
+
+                run_error = 0.
+                run_acc = 0.
+
+                for idx in range(epoch_iterations):
+                    
+                    [_, batch_error, accuracy_error] = sess.run(
+                        [train_step, errors[error_name], accuracies[accuracy_name]])
+
+                    run_error += batch_error
+                    run_acc += batch_acc
+
+                run_error /= provider.batch_size
+                run_acc /= provider.batch_size
+
+                measured_errors.append(run_error)
+                measured_accs.append(run_acc)
+        
+        return measured_errors, measured_accs
+    
+    
+    
     
     
     
