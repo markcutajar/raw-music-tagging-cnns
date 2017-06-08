@@ -12,7 +12,6 @@ import logging
 import numpy as np
 from pydst import DEFAULT_SEED
 from pydub import AudioSegment
-import pydub
 from time import gmtime, strftime
 
 # Define logger, formatter and handler
@@ -42,21 +41,21 @@ def extract_tags_names(root):
 
     # Open file and store the information in the appropriate lists
     filename = root + 'annotations_final.csv'
-    try:
-        with io.open(filename, newline='') as f: 
-            annotations_file = csv.reader(f, delimiter='\t')
-	    for idx, row in enumerate(annotations_file):
-	        if idx == 0:
-	            targets_to_labels = row
-	            del(targets_to_labels[0], targets_to_labels[-1])
-	        else:
-	            tids.append(row[0])
-	            mp3_files.append(row[-1])
-	            targets.append([float(i) for i in row[1:-1]])
-    except:
-        err_str = "File: {0} missing.".format(filename)
-        logger.error(err_str)
-        raise ValueError(err_str)
+    # try:
+    with open(filename, newline='') as f:
+        annotations_file = csv.reader(f, delimiter='\t')
+        for idx, row in enumerate(annotations_file):
+            if idx == 0:
+                targets_to_labels = row
+                del(targets_to_labels[0], targets_to_labels[-1])
+            else:
+                tids.append(row[0])
+                mp3_files.append(row[-1])
+                targets.append([float(i) for i in row[1:-1]])
+    # except:
+    #     err_str = "File: {0} missing.".format(filename)
+    #     logger.error(err_str)
+    #     raise ValueError(err_str)
 
     targets = np.asarray(targets)
     tids = np.asarray(tids)
@@ -240,7 +239,7 @@ if __name__ == "__main__":
     dataset_folder = cwd+"/magnatagatune/"
     rndState = np.random.RandomState(DEFAULT_SEED)
     size_of_sets = -1
-    down_sampling = 10
+    down_sampling = 20
     divisions = [0.7, 0.1, 0.2]
     [trndata, vlddata, tstdata, label_map] = get_dataset(rndState, dataset_folder, divisions, _size_of=size_of_sets,
                                                          _down_sampling_window=down_sampling)

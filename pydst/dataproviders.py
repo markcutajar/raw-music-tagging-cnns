@@ -15,7 +15,7 @@ class DataProvider(object):
     """Data Provider from files and metadata"""
     
     def __init__(self, graph, which_set, batch_size=100, target_size=-1, down_sample=10,
-                shuffle_order=True, rng=None, root='mockdataset/'):
+                shuffle_order=True, rng=None, root='magnatagatune/dataset'):
         
         """Create a new data provider object.
 
@@ -48,8 +48,8 @@ class DataProvider(object):
             raise ValueError('batch_size must be >= 1')
         if target_size < 1 and target_size != -1:
             raise ValueError('target_size must be -1 or > 0')
-        if down_sample not in [1, 10, 40, 70, 100]:
-            raise ValueError('down_sample value must be one of 1, 10, 40, 70, 100')        
+        if down_sample not in [1, 20, 40, 70, 100]:
+            raise ValueError('down_sample value must be one of 1, 20, 40, 70, 100')        
         
         # Set graph
         self.graph = graph
@@ -58,8 +58,8 @@ class DataProvider(object):
         self._data_size = np.ceil(MAX_SAMPLES / down_sample)
         
         # Set data directory paths
-        self.data_dir = root + 'data' + str(self.down_sample) + '/' + which_set + '/'
-        self.metad_path = root + 'data' + str(self.down_sample) + '/' + which_set + '_metadata.npy'
+        self.data_dir = root + 'data' + str(self.down_sample) + '/tracks/'
+        self.metad_path = root + 'data' + str(self.down_sample) + '/' + which_set + '_metadata.npz'
         
         assert os.path.isfile(self.metad_path), (
             'Metadata file does not exist at expected path: ' + self.metad_path)

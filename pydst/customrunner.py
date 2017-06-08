@@ -14,7 +14,7 @@ from pydst import DEFAULT_SEED
 class DataProvider(object):
     """Data Provider from files and metadata"""
     
-    def __init__(self, which_set, batch_size=100, target_size=-1, down_sample=10,
+    def __init__(self, graph, which_set, batch_size=100, target_size=-1, down_sample=10,
                 shuffle_order=True, rng=None, root='mockdataset/'):
         
         """Create a new data provider object.
@@ -51,6 +51,8 @@ class DataProvider(object):
         if down_sample not in [1, 10, 40, 70, 100]:
             raise ValueError('down_sample value must be one of 1, 10, 40, 70, 100')        
         
+        # Set graph
+        self.graph = graph
         # Set down sample factor and data size
         self.down_sample = down_sample
         self._data_size = np.ceil(MAX_SAMPLES / down_sample)
@@ -93,43 +95,45 @@ class DataProvider(object):
         
     def init_queue(self):
         """Initialises queue using tensorflow FIFOQueue"""      
-        
-        self.q_din = tf.placeholder(tf.float32, shape=[self._batch_size, self._data_size])
-        self.q_tin = tf.placeholder(tf.float32, shape=[self._batch_size, self._target_size])
-        
-        # Set queue with FIFOQueue or RandomShuffleQueue
-        self.q = tf.FIFOQueue(shapes=[[self._data_size],[self._target_size]], 
-                                                          capacity=self._maxq, dtypes=[tf.float32, tf.float32])        
-        
-        self.enqop = self.q.enqueue_many([self.q_din, self.q_tin])
+        with self.graph.as_default():
+            self.q_din = tf.placeholder(tf.float32, shape=[self._batch_size, self._data_size])
+            self.q_tin = tf.placeholder(tf.float32, shape=[self._batch_size, self._target_size])
+
+            # Set queue with FIFOQueue or RandomShuffleQueue
+            self.q = tf.FIFOQueue(shapes=[[self._data_size],[self._target_size]], 
+                                                              capacity=self._maxq, dtypes=[tf.float32, tf.float32])        
+
+            self.enqop = self.q.enqueue_many([self.q_din, self.q_tin])
         
         
     def get_data(self):
         """Function to dequeue and return batches"""
-        #data_batch, targets_batch = self.q.dequeue()
-        
-        data_batch, targets_batch= tf.train.batch(self.q.dequeue(), batch_size=self._batch_size, capacity=self._maxq)
+        #data_batch, targets_batch = self.q.dequeue() > Singles instead of batches
+        with self.graph.as_default():
+            data_batch, targets_batch= tf.train.batch(self.q.dequeue(), batch_size=self._batch_size, capacity=self._maxq)
         return data_batch, targets_batch
     
     
     def enable(self, sess, num_threads=1):
         threads = []
+        self.shuffle()
         for idx in range(num_threads):
             thread = threading.Thread(target=self.load_q, args=(sess,))
             thread.daemon = True
             thread.start()
             threads.append(thread)
         
-        self.coord = tf.train.Coordinator()
-        self.thread_runners = tf.train.start_queue_runners(coord=self.coord, sess=sess)
+        with self.graph.as_default():
+            self.coord = tf.train.Coordinator()
+            self.thread_runners = tf.train.start_queue_runners(coord=self.coord, sess=sess)
         return threads
         
     
     def disable(self, sess):
-        sess.run(self.q.close(cancel_pending_enqueues=True))
-        self.coord.request_stop()
-        self.coord.join(self.thread_runners)
-        
+        with self.graph.as_default():
+            sess.run(self.q.close(cancel_pending_enqueues=True))
+            self.coord.request_stop()
+            self.coord.join(self.thread_runners)
     
     def load_q(self, sess):
         """Function to enqueue data in the object queue
@@ -159,7 +163,8 @@ class DataProvider(object):
 
                 lowp = topp
                 try:
-                    sess.run(self.enqop, feed_dict={self.q_din: cdata, self.q_tin: ctargets})
+                    with self.graph.as_default():
+                        sess.run(self.enqop, feed_dict={self.q_din: cdata, self.q_tin: ctargets})
                 except tf.errors.CancelledError:
                     return
             
