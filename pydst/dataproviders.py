@@ -15,7 +15,7 @@ class DataProvider(object):
     """Data Provider from files and metadata"""
     
     def __init__(self, graph, which_set, batch_size=100, target_size=-1, down_sample=10,
-                shuffle_order=True, rng=None, root='magnatagatune/dataset'):
+                shuffle_order=True, rng=None, root='../magnatagatune/dataset/'):
         
         """Create a new data provider object.
 
@@ -36,8 +36,8 @@ class DataProvider(object):
             TODO: FINISH DOCSTRING
         """
         
-        MAX_TAGS = 9
-        MAX_SAMPLES = 4
+        MAX_TAGS = 188
+        MAX_SAMPLES = 465984
         MAX_DOWN_SAMPLE = 100
         
         # Check valid argument data
@@ -59,7 +59,8 @@ class DataProvider(object):
         
         # Set data directory paths
         self.data_dir = root + 'data' + str(self.down_sample) + '/tracks/'
-        self.metad_path = root + 'data' + str(self.down_sample) + '/' + which_set + '_metadata.npz'
+        self.metad_path = os.path.join(root, 'data' + str(self.down_sample) + '/' + which_set + '_metadata.npz')
+        #root + 'data' + str(self.down_sample) + '/' + which_set + '_metadata.npz'
         
         assert os.path.isfile(self.metad_path), (
             'Metadata file does not exist at expected path: ' + self.metad_path)
@@ -67,7 +68,7 @@ class DataProvider(object):
             'Data directory does not exist at expected path: ' + self.data_dir)
         
         # Load targets and tids
-        metad = np.load(self.metad_path).item()
+        metad = np.load(self.metad_path)
         self.targets = metad['targets']
         self.tids = metad['tids']
         
@@ -152,7 +153,9 @@ class DataProvider(object):
                     topp = None
 
                 toload = self.mtids[lowp:topp]
-                ctargets = np.delete(self.mtargets[lowp:topp], np.s_[(self._target_size-self.mtargets.shape[1])::], axis=1)
+                ctargets = self.mtargets[lowp:topp]
+                if (self._target_size-self.mtargets.shape[1]) < 0:
+                    ctargets = np.delete(ctargets, np.s_[(self._target_size-self.mtargets.shape[1])::], axis=1)
 
                 for idx, tid in enumerate(toload):
                     loaded = np.load(self.data_dir + str(tid) + '.npy')

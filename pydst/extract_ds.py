@@ -122,11 +122,11 @@ def extract_data(mp3_filenames, trackid, root, down_sample_factor):
     :param root
     :param down_sample_factor
     """
-
+    
     error_files = []
     for idx, mp3_filename in enumerate(mp3_filenames):
-        load_filename = root + "mp3_files/" + mp3_filename
-        save_filename = root + "tracks/" + str(trackid[idx]) + ".npy"
+        load_filename = root + 'mp3_files/' + mp3_filename
+        save_filename = root + 'dataset/data' + str(down_sample_factor) + "/tracks/" + str(trackid[idx]) + ".npy"
         try:
             song = AudioSegment.from_mp3(load_filename).get_array_of_samples().tolist()
         except:
@@ -134,10 +134,11 @@ def extract_data(mp3_filenames, trackid, root, down_sample_factor):
         else:
             song = np.asarray(song[::down_sample_factor])
             np.save(save_filename, song)
-    np.save(root + 'error_files.npy', error_files)
+    np.save(root + 'dataset/data' + str(down_sample_factor) + '/error_files.npy', error_files)
+    return error_files
 
 
-def seperate_merge(targets, mp3_files, tids, split):
+def seperate_merge(targets, mp3_files, tids, split, error_files):
     """Function to seperate the data according to the 
         splits defined.
     
@@ -152,6 +153,12 @@ def seperate_merge(targets, mp3_files, tids, split):
         data.
     :return test_data: Dictionary with the test data.
     """
+    for error in error_files:
+        delete_idx = np.where(mp3_files == error['mp3'])[0][0]
+        np.delete(mp3_files, delete_idx, axis=0)
+        np.delete(tids, delete_idx, axis=0)
+        np.delete(targets, delete_idx, axis=0)
+    
     size_of_dataset = targets.shape[0]
     test_sz, valid_sz, train_sz = int(round(size_of_dataset * split[2])), int(round(size_of_dataset * split[1])), int(round(
         size_of_dataset * split[0]))
@@ -198,7 +205,7 @@ def get_dataset(rng, root_folder, data_div, _size_of=-1, _down_sampling_window=3
     logger.info("Tags sorted according to frequency")
 
     # Extract data from mp3 files and save npy
-    extract_data(mp3_files, tids, root_folder, down_sample_factor=_down_sampling_window)
+    error_files = extract_data(mp3_files, tids, root_folder, down_sample_factor=_down_sampling_window)
     logger.info("Data extracted from mp3 files and saved")
 
     # Check if 3 divisions are given (train, valid, test)
@@ -208,13 +215,13 @@ def get_dataset(rng, root_folder, data_div, _size_of=-1, _down_sampling_window=3
         raise ValueError(err_str)
 
     # Seperate in test, valid, training sets - 20, 10, 70
-    [train, valid, test] = seperate_merge(targets, mp3_files, tids, data_div)
+    [train, valid, test] = seperate_merge(targets, mp3_files, tids, data_div, error_files)
     logger.info("Data separated and merged into dictionaries")
 
     return train, valid, test, map_of_labels
 
 
-def save_archives(train_md, valid_md, test_md, lmap):
+def save_archives(train_md, valid_md, test_md, lmap, root, down_sample_factor):
     """Function to save the data in archives.
     
     :param train_md 
@@ -222,21 +229,25 @@ def save_archives(train_md, valid_md, test_md, lmap):
     :param test_md 
     :param lmap
     """
-    train_archive, valid_archive, test_archive = "mtat_metatrain.npz", "mtat_metavalid.npz", "mtat_metatest.npz"
-    np.savez(train_archive, label_map=lmap, mp3_files=train_md['mp3f'], targets=train_md['targets'],
+    train_save = root + 'dataset/data' + str(down_sample_factor) + '/train_metadata.npz'
+    valid_save = root + 'dataset/data' + str(down_sample_factor) + '/valid_metadata.npz'
+    test_save = root + 'dataset/data' + str(down_sample_factor) + '/test_metadata.npz'
+    
+    
+    np.savez(train_save, label_map=lmap, mp3_files=train_md['mp3f'], targets=train_md['targets'],
              tids=train_md['tids'])
 
-    np.savez(valid_archive, label_map=lmap, mp3_files=valid_md['mp3f'], targets=valid_md['targets'],
+    np.savez(valid_save, label_map=lmap, mp3_files=valid_md['mp3f'], targets=valid_md['targets'],
              tids=valid_md['tids'])
 
-    np.savez(test_archive, label_map=lmap, mp3_files=test_md['mp3f'], targets=test_md['targets'],
+    np.savez(test_save, label_map=lmap, mp3_files=test_md['mp3f'], targets=test_md['targets'],
              tids=test_md['tids'])
 
 
 if __name__ == "__main__":
     # Extract the dataset
     cwd = os.getcwd()
-    dataset_folder = cwd+"/magnatagatune/"
+    dataset_folder = cwd+'/magnatagatune/'
     rndState = np.random.RandomState(DEFAULT_SEED)
     size_of_sets = -1
     down_sampling = 20
@@ -246,5 +257,5 @@ if __name__ == "__main__":
     logger.info("Extracted the metadata and save npy files")
 
     # Save data into archive
-    save_archives(trndata, vlddata, tstdata, label_map)
+    save_archives(trndata, vlddata, tstdata, label_map, dataset_folder, down_sampling)
     logger.info("Saved the different sets of metadata")

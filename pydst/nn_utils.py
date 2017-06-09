@@ -57,7 +57,7 @@ def train(graph, sess, max_num_batches, error, accuracy, epochs=100):
     measured_errors = []
     measured_accs = []
     
-    epoch_iterations = max_num_batched
+    epoch_iterations = max_num_batches
     
     with graph.as_default():
       
@@ -79,6 +79,7 @@ def train(graph, sess, max_num_batches, error, accuracy, epochs=100):
 
                 measured_errors.append(run_error)
                 measured_accs.append(run_acc)
+                print('Epoch {}, Error {}, Accuracy {}'.format(epoch, run_error, run_acc)) 
         
         return measured_errors, measured_accs
     

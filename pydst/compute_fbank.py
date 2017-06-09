@@ -4,42 +4,61 @@
 
 from python_speech_features import logfbank
 import numpy as np
+import logging
+import os
+from time import gmtime, strftime
+
+# Define logger, formatter and handler
+LOGGER_FORMAT = '%(levelname)s:%(asctime)s:%(name)s:%(message)s'
+TIME = strftime("%Y%m%d_%H%M%S", gmtime())
+LOG_FILENAME = 'logs/fbe_'+TIME+'.log'
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter(LOGGER_FORMAT)
+file_handler = logging.FileHandler(LOG_FILENAME)
+stream_handler = logging.StreamHandler()
+file_handler.setFormatter(formatter)
+stream_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
 
 
-def extract_fbanks(LOAD_LOCATION, SAVE_LOCATION, which_set, sample_rate=16000, fft_size=512, filters=26):
+def extract_fbanks(LOAD_LOCATION, SAVE_LOCATION, which_set, samplerate=16000, fft_size=512, filters=26):
     
-    data_folder = 'data1/'
+    logger.info("FBank extraction started!")
+    data_dir = LOAD_LOCATION + 'tracks/'
+    metad_path = LOAD_LOCATION + which_set + '_metadata.npz'
     
-    data_dir = LOAD_LOCATION + data_folder + which_set + '/'
-    metad_path = root + data_folder + which_set + '_metadata.npy'
-    
-    assert os.path.isfile(self.metad_path), (
-        'Metadata file does not exist at expected path: ' + self.metad_path)
-    assert os.path.isdir(self.data_dir), (
-        'Data directory does not exist at expected path: ' + self.data_dir)
+    assert os.path.isfile(metad_path), (
+        'Metadata file does not exist at expected path: ' + metad_path)
+    assert os.path.isdir(data_dir), (
+        'Data directory does not exist at expected path: ' + data_dir)
     
     
-    metad = np.load(self.metad_path).item()
+    metad = np.load(metad_path)
     tids = metad['tids']
     
+    logger.info("Iterating through files")
     for tid in tids:
         
-        filename = self.data_dir + str(tid) + '.npy'
-        file = np.load(self.data_dir + str(tid) + '.npy')
+        filename = data_dir + str(tid) + '.npy'
+        file = np.load(data_dir + str(tid) + '.npy')
         
-        fbank_file = logfbank(signal=file, sample_rate=sample_rate, nfft=fft_size, nfilt=filters, highfreq=None)
+        fbank_file = logfbank(signal=file, samplerate=samplerate, nfft=fft_size, nfilt=filters, highfreq=None)
         
-        savename = SAVE_LOCATION + data_folder + str(tid) + '.npy'
+        savename = SAVE_LOCATION + 'tracks/' + str(tid) + '.npy'
         np.save(savename, fbank_file)
-        
+    np.save(SAVE_LOCATION + which_set + '_metadata.npy')
+    logger.info("Files saved")   
         
 if __name__ == "__main__":
 
-    LOAD_LOCATION = 'magnatagatune/tracks/'
-    SAVE_LOCATION = 'magnatagatune/features/'
+    LOAD_LOCATION = 'magnatagatune/dataset/data1/'
+    SAVE_LOCATION = 'magnatagatune/dataset/fbankfeatures/data1/'
     
     sets = ['train', 'valid', 'test']
     
     for setname in sets:
-        extract_fbank(LOAD_LOCATION, SAVE_LOCATION, setname, 32000, 512, 40)
+        extract_fbanks(LOAD_LOCATION, SAVE_LOCATION, setname, 32000, 512, 40)
         

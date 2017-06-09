@@ -1,11 +1,13 @@
 setup.py
 pydst/__init__.py
+pydst/compute_fbank.py
 pydst/customrunner.py
 pydst/dataproviders.py
 pydst/extract_ds.py
 pydst/lastfm_apireq.py
 pydst/lastfm_db_tidex.py
 pydst/nn_utils.py
+pydst/nn_utils_prerefractor.py
 pydst/rate_limiters.py
 pydst.egg-info/PKG-INFO
 pydst.egg-info/SOURCES.txt
