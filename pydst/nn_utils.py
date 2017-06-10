@@ -7,7 +7,13 @@ This module provides utilities classes that are handy in neural network construc
 import tensorflow as tf
 import numpy as np
        
-            
+
+
+
+
+
+    
+    
 def residual_layer(self, residual_layer_name, name, activation=None):
     """Function to add a residual layer to the graph.
         

@@ -49,16 +49,18 @@ def extract_fbanks(LOAD_LOCATION, SAVE_LOCATION, which_set, samplerate=16000, ff
         
         savename = SAVE_LOCATION + 'tracks/' + str(tid) + '.npy'
         np.save(savename, fbank_file)
-    np.save(SAVE_LOCATION + which_set + '_metadata.npy')
+    np.savez(SAVE_LOCATION + which_set + '_metadata.npz', label_map=metad['label_map'],
+             mp3_files=metad['mp3_files'], targets=metad['targets'], tids=metad['tids'])    
     logger.info("Files saved")   
         
 if __name__ == "__main__":
 
     LOAD_LOCATION = 'magnatagatune/dataset/data1/'
-    SAVE_LOCATION = 'magnatagatune/dataset/fbankfeatures/data1/'
+    SAVE_LOCATION = 'magnatagatune/dataset/fbankfeatures/'
     
     sets = ['train', 'valid', 'test']
     
     for setname in sets:
-        extract_fbanks(LOAD_LOCATION, SAVE_LOCATION, setname, 32000, 512, 40)
+        logger.info("Processing {} dataset".format(setname)) 
+        extract_fbanks(LOAD_LOCATION, SAVE_LOCATION, setname, 16000, 512, 40)
         

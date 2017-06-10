@@ -249,8 +249,8 @@ if __name__ == "__main__":
     cwd = os.getcwd()
     dataset_folder = cwd+'/magnatagatune/'
     rndState = np.random.RandomState(DEFAULT_SEED)
-    size_of_sets = -1
-    down_sampling = 20
+    size_of_sets = 10
+    down_sampling = 1
     divisions = [0.7, 0.1, 0.2]
     [trndata, vlddata, tstdata, label_map] = get_dataset(rndState, dataset_folder, divisions, _size_of=size_of_sets,
                                                          _down_sampling_window=down_sampling)
