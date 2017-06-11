@@ -2,6 +2,8 @@
 """Data providers.
 This module provides classes for loading datasets and iterating over batches of
 data points.
+
+TODO: Logger and tags and docstrings
 """
 
 import os
@@ -14,8 +16,8 @@ from pydst import DEFAULT_SEED
 class DataProvider(object):
     """Data Provider from files and metadata"""
     
-    def __init__(self, graph, which_set, batch_size=100, target_size=-1, down_sample=10,
-                shuffle_order=True, rng=None, root='mockdataset/'):
+    def __init__(self, graph, which_set, batch_size=100, target_size=-1, num_samples=131072, max_samples=465984,
+                shuffle_order=True, rng=None, root='../magnatagatune/dataset/raw/'):
         
         """Create a new data provider object.
 
@@ -36,9 +38,7 @@ class DataProvider(object):
             TODO: FINISH DOCSTRING
         """
         
-        MAX_TAGS = 9
-        MAX_SAMPLES = 4
-        MAX_DOWN_SAMPLE = 100
+        MAX_TAGS = 188
         
         # Check valid argument data
         assert which_set in ['train', 'valid', 'test'], (
@@ -47,27 +47,29 @@ class DataProvider(object):
         if batch_size < 1:
             raise ValueError('batch_size must be >= 1')
         if target_size < 1 and target_size != -1:
-            raise ValueError('target_size must be -1 or > 0')
-        if down_sample not in [1, 10, 40, 70, 100]:
-            raise ValueError('down_sample value must be one of 1, 10, 40, 70, 100')        
-        
+            raise ValueError('target_size must be -1 or > 0')     
+
         # Set graph
         self.graph = graph
         # Set down sample factor and data size
-        self.down_sample = down_sample
-        self._data_size = np.ceil(MAX_SAMPLES / down_sample)
+        self._data_size = num_samples
+        samples_to_remove = max_samples-self._data_size
+        if samples_to_remove < 0:
+            raise ValueError('num_samples {} is larger than max_samples {}'.format(num_samples, max_samples))
+        
+        self._right_snip = int(np.round(samples_to_remove / 2.0))
+        self._left_snip = samples_to_remove - self._right_snip
         
         # Set data directory paths
-        self.data_dir = root + 'data' + str(self.down_sample) + '/' + which_set + '/'
-        self.metad_path = root + 'data' + str(self.down_sample) + '/' + which_set + '_metadata.npy'
-        
+        self.data_dir = os.path.join(root, 'tracks/')
+        self.metad_path = os.path.join(root, (which_set + '_metadata.npz'))
         assert os.path.isfile(self.metad_path), (
             'Metadata file does not exist at expected path: ' + self.metad_path)
         assert os.path.isdir(self.data_dir), (
             'Data directory does not exist at expected path: ' + self.data_dir)
         
         # Load targets and tids
-        metad = np.load(self.metad_path).item()
+        metad = np.load(self.metad_path)
         self.targets = metad['targets']
         self.tids = metad['tids']
         
@@ -152,7 +154,9 @@ class DataProvider(object):
                     topp = None
 
                 toload = self.mtids[lowp:topp]
-                ctargets = np.delete(self.mtargets[lowp:topp], np.s_[(self._target_size-self.mtargets.shape[1])::], axis=1)
+                ctargets = self.mtargets[lowp:topp]
+                if (self._target_size-self.mtargets.shape[1]) < 0:
+                    ctargets = np.delete(ctargets, np.s_[(self._target_size-self.mtargets.shape[1])::], axis=1)
 
                 for idx, tid in enumerate(toload):
                     loaded = np.load(self.data_dir + str(tid) + '.npy')
@@ -160,8 +164,13 @@ class DataProvider(object):
                         cdata = loaded
                     else:
                         cdata=np.vstack((cdata, loaded))
-
+                        
+                if self._left_snip != 0:
+                    cdata = np.delete(cdata, np.s_[:self._left_snip], axis=1)
+                if self._right_snip != 0:
+                    cdata = np.delete(cdata, np.s_[-self._right_snip:], axis=1) 
                 lowp = topp
+                
                 try:
                     with self.graph.as_default():
                         sess.run(self.enqop, feed_dict={self.q_din: cdata, self.q_tin: ctargets})
@@ -196,36 +205,5 @@ class DataProvider(object):
     def max_num_batches(self):
         """Returns the _max_num_batches."""
         return self._max_num_batches
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+
+    
