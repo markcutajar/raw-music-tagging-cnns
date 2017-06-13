@@ -16,7 +16,7 @@ from pydst import DEFAULT_SEED
 class DataProvider(object):
     """Data Provider from files and metadata"""
     
-    def __init__(self, graph, which_set, batch_size=20, target_size=-1, num_samples=131072, max_samples=465984, data_depth=1,
+    def __init__(self, which_set, batch_size=20, target_size=-1, num_samples=131072, max_samples=465984, data_depth=1,
                 shuffle_order=True, rng=None, root='../magnatagatune/dataset/raw/', shape='flat'):
         
         """Create a new data provider object.
@@ -38,8 +38,6 @@ class DataProvider(object):
             TODO: FINISH DOCSTRING
         """
         
-        # Set graph
-        self.graph = graph
         MAX_TAGS = 188
         
         # Check valid argument data
@@ -112,10 +110,9 @@ class DataProvider(object):
 
         
     def init_queue(self):
-        """Initialises queue using tensorflow FIFOQueue"""      
-        with self.graph.as_default():
-            self.q_din = tf.placeholder(tf.float32, shape=self.data_out_dim)
-            self.q_tin = tf.placeholder(tf.float32, shape=[self._batch_size, self._target_size])
+        """Initialises queue using tensorflow FIFOQueue"""
+        self.q_din = tf.placeholder(tf.float32, shape=self.data_out_dim)
+        self.q_tin = tf.placeholder(tf.float32, shape=[self._batch_size, self._target_size])
 
             # Set queue with FIFOQueue or RandomShuffleQueue
             self.q = tf.FIFOQueue(shapes=[self.queue_shape, [self._target_size]], 
@@ -127,8 +124,7 @@ class DataProvider(object):
     def get_data(self):
         """Function to dequeue and return batches"""
         #data_batch, targets_batch = self.q.dequeue() > Singles instead of batches
-        with self.graph.as_default():
-            data_batch, targets_batch= tf.train.batch(self.q.dequeue(), batch_size=self._batch_size, capacity=self._maxq)
+        data_batch, targets_batch= tf.train.batch(self.q.dequeue(), batch_size=self._batch_size, capacity=self._maxq)
         return data_batch, targets_batch
     
     
@@ -141,17 +137,15 @@ class DataProvider(object):
             thread.start()
             threads.append(thread)
         
-        with self.graph.as_default():
-            self.coord = tf.train.Coordinator()
-            self.thread_runners = tf.train.start_queue_runners(coord=self.coord, sess=sess)
+            #self.coord = tf.train.Coordinator()
+            #self.thread_runners = tf.train.start_queue_runners(coord=self.coord, sess=sess)
         return threads
         
     
     def disable(self, sess):
-        with self.graph.as_default():
             sess.run(self.q.close(cancel_pending_enqueues=True))
-            self.coord.request_stop()
-            self.coord.join(self.thread_runners)
+            #self.coord.request_stop()
+            #self.coord.join(self.thread_runners)
     
     def load_q(self, sess):
         """Function to enqueue data in the object queue
@@ -204,8 +198,7 @@ class DataProvider(object):
                 lowp = topp
                 
                 try:
-                    with self.graph.as_default():
-                        sess.run(self.enqop, feed_dict={self.q_din: cdata, self.q_tin: ctargets})
+                    sess.run(self.enqop, feed_dict={self.q_din: cdata, self.q_tin: ctargets})
                 except tf.errors.CancelledError:
                     return
             
