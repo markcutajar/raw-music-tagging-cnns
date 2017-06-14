@@ -34,6 +34,12 @@ Another alternative is the newly setup FMA dataset. This dataset presented in Ap
 
 The FMA dataset might be used further on in the study to compare the effectivness of the models.
 <br><br> 
+### Framework
+
+This project will make use of Tensorflow Python API v1.1 and Cloud SDK. The models are first tested on the local environment and then exported to be trained on Cloud ML. The models are trained in distributed manner in order to minimize the computational time and hence larger networks can be used. 
+
+As much as possible the low level API shall be used with some minor exceptions. This is done so the graph can be customised as much as needed for the different tests.
+<br><br>
 *To be continued...*
 
 
