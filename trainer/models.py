@@ -61,15 +61,15 @@ def basic_conv(data_batch,
     train_step = tf.train.AdadeltaOptimizer(learning_rate=learning_rate).minimize(errors[name], global_step=global_step)
        
         
-    name = 'accuracy'
+    """name = 'accuracy'
     with tf.name_scope(name):
         accs[name] = tf.contrib.metrics.streaming_accuracy(last_output, targets_batch)
-    tf.summary.scalar(name, accs[name])
+    tf.summary.scalar(name, accs[name])"""
     
-    name = 'auroc'
+    """name = 'auroc'
     with tf.name_scope(name):
         accs[name] = tf.contrib.metrics.streaming_auc(last_output, targets_batch)
-    tf.summary.scalar(name, accs[name])
+    tf.summary.scalar(name, accs[name])"""
 
     summary_op = tf.summary.merge_all()
     
