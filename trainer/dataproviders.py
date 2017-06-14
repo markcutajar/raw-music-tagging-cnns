@@ -115,10 +115,10 @@ class DataProvider(object):
         self.q_tin = tf.placeholder(tf.float32, shape=[self._batch_size, self._target_size])
 
             # Set queue with FIFOQueue or RandomShuffleQueue
-            self.q = tf.FIFOQueue(shapes=[self.queue_shape, [self._target_size]], 
+        self.q = tf.FIFOQueue(shapes=[self.queue_shape, [self._target_size]], 
                                                               capacity=self._maxq, dtypes=[tf.float32, tf.float32])        
 
-            self.enqop = self.q.enqueue_many([self.q_din, self.q_tin])
+        self.enqop = self.q.enqueue_many([self.q_din, self.q_tin])
         
         
     def get_data(self):
