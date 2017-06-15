@@ -1,4 +1,4 @@
-Things to do this week and some pointers:
+Notes:
 
 1. Fix that the model can be trained in the cloud in distributed mode.
 	This would allow faster training, that wouldn't use computational
