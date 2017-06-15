@@ -1,6 +1,6 @@
 # Automatic Music Tagging using Convolutional Neural Networks
 
-This repository contains all the code, documentation, and logs of the project regarding using convolutional nueral networks to automatically tag music. This is a dissertation project at the University of Edinbrugh, partly also subsidised by Malta's Endeavour scholarship scheme 2016-2017.
+This repository contains all the code, documentation, and logs of the project regarding using convolutional nueral networks to automatically tag music. This is an MSc dissertation project at the University of Edinbrugh, partly also subsidised by Malta's Endeavour scholarship scheme 2016-2017.
 
 Author: Mark Cutajar <br>
 Email: mcut94@gmail.com / markc@gummymelon.com
