@@ -1,0 +1,13 @@
+Notes:
+
+1. The module was tested locally, however, the networks seems too shallow
+	to learn the data from the network. Using the Adam Optimizer in an MLP
+	system, in a few batches the error goes down to 0.6 and stabilizes 
+	there for the rest of the epochs. 
+	
+2. Similarly, when using a convolutional neural network with 4 layers, the
+	error goes down to 0.31 and stabilizes there for the rest of the epochs.
+
+3. Using an AdaDelta Optimizer slows down the descent to the minimum but
+	the final result is still the same achieved by the Adam. 
+	
