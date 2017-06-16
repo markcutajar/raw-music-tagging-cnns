@@ -49,7 +49,7 @@ class BatchInputFunctions(object):
         self._selective_tags = selective_tags
         self._num_samples = num_samples
         self._data_shape = data_shape
-        self._shuffle = shuffle
+        self._shuffle = shuffl
 
         self._label_map = np.load(label_map_file)['label_map'].tolist()
 
@@ -61,7 +61,6 @@ class BatchInputFunctions(object):
 
         _, serialized_example = reader.read_up_to(filename_queue,
                                                   num_records=self._batch_size)
-
         features = tf.parse_example(
             serialized_example,
             features={
