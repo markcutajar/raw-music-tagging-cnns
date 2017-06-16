@@ -1,0 +1,9 @@
+INFO:2017-06-16 01:08:31,579:__main__:Extracted tags and names into arrays
+INFO:2017-06-16 01:08:31,581:__main__:Label_map 188, mp3_files 25860, targets (25860, 188), tids (25860,)
+INFO:2017-06-16 01:08:31,612:__main__:Shuffled targets, mp3 files and tids
+INFO:2017-06-16 01:08:31,612:__main__:Number of samples reduced
+INFO:2017-06-16 01:08:31,616:__main__:Tags sorted according to frequency
+INFO:2017-06-16 01:08:34,892:__main__:Data extracted from mp3 files and saved
+INFO:2017-06-16 01:08:34,892:__main__:Data separated and merged into dictionaries
+INFO:2017-06-16 01:08:34,894:__main__:Extracted the metadata and save npy files
+INFO:2017-06-16 01:08:34,900:__main__:Saved the different sets of metadata
