@@ -123,11 +123,14 @@ class DataProvider(object):
         
     def get_data(self):
         """Function to dequeue and return batches"""
-        data_batch, targets_batch= tf.train.batch(self.q.dequeue(), batch_size=self._batch_size, capacity=self._maxq)
-        return data_batch, targets_batch
+        try:
+            data_batch, targets_batch= tf.train.batch(self.q.dequeue(), batch_size=self._batch_size, capacity=self._maxq)
+            return data_batch, targets_batch
+        except tf.errors.CancelledError:
+            return
     
     
-    def enable(self, sess, num_threads=1):
+    def enable(self, sess, num_threads=4):
         threads = []
         self.shuffle()
         for idx in range(num_threads):

@@ -12,13 +12,12 @@
 import argparse
 import json
 import os
-import threading
-
-import tensorflow as tf
-
 import models
+import threading
+import tensorflow as tf
 from dataproviders import DataProvider
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.logging.set_verbosity(tf.logging.INFO)
 
 
@@ -34,7 +33,7 @@ class EvaluationRunHook(tf.train.SessionRunHook):
     """
     def __init__(self,
                  checkpoint_dir,
-                 summary_op,
+                 metric_dict,
                  graph,
                  eval_frequency,
                  input_fn,
@@ -45,20 +44,20 @@ class EvaluationRunHook(tf.train.SessionRunHook):
         self._checkpoint_dir = checkpoint_dir
         self._kwargs = kwargs
         self._eval_every = eval_frequency
+        self._eval_every = 5
         self._latest_checkpoint = None
         self._checkpoints_since_eval = 0
         self._graph = graph
         self._input_fn = input_fn
-        self._summary_op = summary_op
 
         with graph.as_default():
-            """value_dict, update_dict = tf.contrib.metrics.aggregate_metric_map(metric_dict)
+            value_dict, update_dict = tf.contrib.metrics.aggregate_metric_map(metric_dict)
 
             # Creates a Summary protocol buffer by merging summaries
             self._summary_op = tf.summary.merge([
                 tf.summary.scalar(name, value_op)
                 for name, value_op in value_dict.iteritems()
-            ])"""
+            ])
 
             # Saver class add ops to save and restore
             # variables to and from checkpoint
@@ -68,8 +67,8 @@ class EvaluationRunHook(tf.train.SessionRunHook):
             # the global training step
             self._gs = tf.contrib.framework.get_or_create_global_step()
 
-            """self._final_ops_dict = value_dict
-            self._eval_ops = update_dict.values()"""
+            self._final_ops_dict = value_dict
+            self._eval_ops = update_dict.values()
 
 
         # MonitoredTrainingSession runs hooks in background threads
@@ -87,7 +86,12 @@ class EvaluationRunHook(tf.train.SessionRunHook):
 
         if self._eval_lock.acquire(False):
             try:
+                #tf.logging.info('{}, {}'.format(self._checkpoints_since_eval, self._eval_every))
+                #if (self._checkpoints_since_eval >= self.a):
+                #    self._checkpoints_since_eval = 0
+                #    tf.logging.info('now')
                 if self._checkpoints_since_eval > self._eval_every:
+                    tf.logging.info('running eval after run')
                     self._checkpoints_since_eval = 0
                     self._run_eval()
             finally:
@@ -113,8 +117,8 @@ class EvaluationRunHook(tf.train.SessionRunHook):
 
     def _run_eval(self):
         """Run model evaluation and generate summaries."""
-        coord = tf.train.Coordinator(clean_stop_exception_types=(
-            tf.errors.CancelledError, tf.errors.OutOfRangeError))
+        coord = tf.train.Coordinator()#clean_stop_exception_types=(tf.errors.CancelledError))
+        # tf.errors.OutOfRangeError
 
         with tf.Session(graph=self._graph) as session:
             # Restores previously saved variables from latest checkpoint
@@ -124,28 +128,29 @@ class EvaluationRunHook(tf.train.SessionRunHook):
                 tf.tables_initializer(),
                 tf.local_variables_initializer()
             ])
+
             tf.train.start_queue_runners(coord=coord, sess=session)
             self._input_fn.enable(sess=session)
             train_step = session.run(self._gs)
 
             tf.logging.info('Starting Evaluation For Step: {}'.format(train_step))
-            with coord.stop_on_exception():
-                eval_step = 0
-                while self._eval_steps is None or eval_step < self._eval_steps:
-                    summaries = session.run([self._summary_op])
-                    if eval_step % 100 == 0:
-                        tf.logging.info("On Evaluation Step: {}".format(eval_step))
-                    eval_step += 1
+            #with coord.stop_on_exception():
+            eval_step = 0
+            while self._eval_steps is None or eval_step < self._eval_steps:
+                [summaries, final_values, _] = session.run([self._summary_op,
+                                                       self._final_ops_dict,
+                                                       self._eval_ops])
+                if eval_step % 100 == 0:
+                    tf.logging.info("On Evaluation Step: {}".format(eval_step))
+                eval_step += 1
 
             # Write the summaries
             self._file_writer.add_summary(summaries, global_step=train_step)
             self._file_writer.flush()
-            self._input_fn.disable(sess=session)
-            self.coord.request_stop()
             tf.logging.info(final_values)
 
 
-def run(target, 
+def run(target,
         is_chief,
         job_dir,
         train_steps,
@@ -203,7 +208,6 @@ def run(target,
     # crash happens.
 
     if is_chief:
-        
         # Construct evaluation graph
         evaluation_graph = tf.Graph()
         with evaluation_graph.as_default():
@@ -223,16 +227,16 @@ def run(target,
             features, labels = input_fn.get_data()
             
             # Metric dictionary of evaluation
-            [summary_op, _, _] = model(
+            metric_dict = model(
+                models.EVAL,
                 features,
                 labels,
-                learning_rate=learning_rate            
+                learning_rate=learning_rate
             )
-            
 
         hooks = [EvaluationRunHook(
             job_dir,
-            summary_op,
+            metric_dict,
             evaluation_graph,
             eval_frequency,
             eval_steps=eval_steps,
@@ -265,31 +269,32 @@ def run(target,
             features, labels = input_fn.get_data()
             
             # Metric 
-            [summary_op, train_op, global_step_tensor] = model(
+            [train_op, global_step_tensor] = model(
+                models.TRAIN,
                 features,
                 labels,
                 learning_rate=learning_rate            
             )
         
-        
 
         # Creates a MonitoredSession for training
         # MonitoredSession is a Session-like object that handles
         # initialization, recovery and hooks
-        # https://www.tensorflow.org/api_docs/python/tf/train/MonitoredTrainingSession
+        tf.logging.info('Starting session')
         with tf.train.MonitoredTrainingSession(master=target, 
                                                is_chief=is_chief,
                                                checkpoint_dir=job_dir,
                                                hooks=hooks,
                                                save_checkpoint_secs=20,
-                                               save_summaries_steps=50) as session:
+                                               save_summaries_steps=30) as session:
 
             # Tuple of exceptions that should cause a clean stop of the coordinator
-            coord = tf.train.Coordinator(clean_stop_exception_types=(
-                tf.errors.CancelledError, tf.errors.OutOfRangeError))
-
+            tf.logging.info('Coord')
+            coord = tf.train.Coordinator()#clean_stop_exception_types=(
+                #tf.errors.CancelledError)) #tf.errors.OutOfRangeError
+            tf.logging.info('Complete Coord')
             # Important to start all queue runners so that data is available
-            # for reading
+            # for reading.
             # Initialize the input_fn thread to load the queue runner.
             tf.train.start_queue_runners(coord=coord, sess=session)
             input_fn.enable(sess=session)
@@ -386,7 +391,7 @@ def run(target,
 def dispatch(*args, **kwargs):
     """Parse TF_CONFIG to cluster_spec and call run() method
     """
-
+    tf.logging.info('Setting up the server')
     tf_config = os.environ.get('TF_CONFIG')
 
     # If TF_CONFIG is not available run local
@@ -425,7 +430,16 @@ if __name__ == "__main__":
                     required=True,
                     type=str,
                     help='GCS or local dir to write checkpoints and export model')
-    
+
+    parser.add_argument('--model-function',
+                    required=True,
+                    type=str)
+
+    parser.add_argument('--data-root',
+                    required=True,
+                    type=str,
+                    help='Dataset location local or GCS')
+
     parser.add_argument('--train-steps',
                     type=int,
                     help="""\
@@ -456,12 +470,8 @@ if __name__ == "__main__":
                     help='Learning rate for SGD')
   
     parser.add_argument('--eval-frequency',
-                    default=50,
+                    default=5,
                     help='Perform one evaluation per n steps')
-  
-    parser.add_argument('--model-function',
-                    required=True,
-                    type=str)
   
     parser.add_argument('--eval-num-epochs',
                     type=int,
@@ -470,13 +480,7 @@ if __name__ == "__main__":
       
     parser.add_argument('--num-epochs',
                     type=int,
-                    default=30,
                     help='Maximum number of epochs on which to train')
-    
-    parser.add_argument('--data-root',
-                    required=True,
-                    type=str,
-                    help='Dataset location local or GCS')
     
     parser.add_argument('--target-size',
                     type=int,
@@ -517,5 +521,6 @@ if __name__ == "__main__":
                         
     parse_args, unknown = parser.parse_known_args()
 
+    # If unknown arguments found, warn them on the console
     tf.logging.warn('Unknown arguments: {}'.format(unknown))
     dispatch(**parse_args.__dict__)
