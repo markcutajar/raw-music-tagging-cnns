@@ -77,8 +77,13 @@ class DataProvider(object):
                 'song': tf.FixedLenFeature([], tf.string)
             }
         )
-        all_song = tf.decode_raw(features['song'], tf.int32)
-        all_tags = tf.decode_raw(features['tags'], tf.int32)
+
+        all_song = tf.cast(tf.decode_raw(features['song'], tf.int32), tf.float32)
+        all_tags = tf.cast(tf.decode_raw(features['tags'], tf.int32), tf.float32)
+
+        if self._sample_depth != 1:
+            all_song = tf.reshape(all_song, [-1, self._num_samples, self._sample_depth])
+
 
         # Reduce tags or selective
         if self._selective_tags is not None:
@@ -99,10 +104,14 @@ class DataProvider(object):
             num_samples = min(self._num_samples, self._max_samples)
         else:
             raise ValueError('Number of samples must be -1 or > 0')
+        difference = self._max_samples - num_samples
+        start_red = int(difference / 2.0)
+        end_red = self._max_samples - start_red
+
         if self._sample_depth == 1:
-            song = tf.slice(all_song, [0, 0], [-1, num_samples])
+            song = tf.slice(all_song, [0, start_red], [-1, end_red])
         else:
-            raise NotImplementedError
+            song = tf.slice(all_song, [0, start_red, 0], [-1, end_red, -1])
 
         # Shuffle
         if self._shuffle:
@@ -116,12 +125,15 @@ class DataProvider(object):
 
         # Return depending on shape
         if self._data_shape == 'flat':
-            return song, tags
+            if self._sample_depth == 1:
+                return song, tags
+            else:
+                return tf.reshape(song, [-1, self._sample_depth * self._num_samples]), tags
+
         elif self._data_shape == 'image':
             if self._sample_depth == 1:
-                song = tf.expand_dims(song, axis=2)
+                return tf.expand_dims(song, axis=2), tags
             else:
-                raise NotImplementedError
-            return song, tags
+                return tf.expand_dims(song, axis=3), tags
         else:
             raise ValueError('Shape not recognized!')
