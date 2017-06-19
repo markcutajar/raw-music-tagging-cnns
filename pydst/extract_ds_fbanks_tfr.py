@@ -5,16 +5,14 @@ This function can be used as both a standalone function
 or imported in a different class.
 """
 
-import io
-import os
 import csv
 import logging
 import numpy as np
-from array import array
 import tensorflow as tf
 from pydst import DEFAULT_SEED
 from pydub import AudioSegment
 from time import gmtime, strftime
+from python_speech_features import logfbank
 
 # Define logger, formatter and handler
 LOGGER_FORMAT = '%(levelname)s:%(asctime)s:%(name)s:%(message)s'
@@ -126,7 +124,7 @@ def extract_data(mp3s_split, targets_split, root):
     """
     for setname, mp3_filenames in mp3s_split.items():
 
-        save_name = root + setname + '_rawdata.tfrecords'
+        save_name = root + setname + '_fbanksdata.tfrecords'
         writer = tf.python_io.TFRecordWriter(save_name)
 
         for idx, mp3_filename in enumerate(mp3_filenames):
@@ -137,6 +135,9 @@ def extract_data(mp3s_split, targets_split, root):
                 pass
             else:
                 song_samples = np.asarray(song.get_array_of_samples().tolist())
+                song_samples = logfbank(signal=song_samples, samplerate=16000, nfft=512, nfilt=40)
+
+
                 tags = targets_split[setname][idx]
 
                 num_samples = song_samples.shape[0]
@@ -233,36 +234,6 @@ def get_dataset(rng, root_folder, data_div, _size_of):
     return tids_split, mp3s_split, map_of_labels
 
 
-def save_archives(train_md, valid_md, test_md, label_map, root):
-    """Function to save the data in archives.
-    
-    :param train_md 
-    :param valid_md 
-    :param test_md 
-    :param label_map
-    """
-    for idx in range(3):
-        if idx == 0:
-            savename = root + 'train_files.txt'
-            set = train_md
-
-        elif idx == 1:
-            savename = root + 'valid_files.txt'
-            set = valid_md
-        else:
-            savename = root + 'test_files.txt'
-            set = test_md
-        with open(savename, 'w') as file:
-            for item in set:
-                content = str(item) + '.csv'
-                file.write('{}\n'.format(content))
-
-    with open('label_map.txt', 'w') as file:
-        for label in label_map:
-            content = str(label)
-            file.write('{}\n'.format(content))
-
-
 if __name__ == "__main__":
     # Extract the dataset
     dataset_folder = 'magnatagatune/'
@@ -274,10 +245,5 @@ if __name__ == "__main__":
                                                       dataset_folder,
                                                       divisions,
                                                       size_of_sets)
-
-    np.savez(dataset_folder + 'tfrecords_metadata.npz',
-             tids_split=tids_split,
-             mp3s_split=mp3s_split,
-             label_map=label_map)
 
     logger.info("Extracted the metadata and saved tfrecord files")
