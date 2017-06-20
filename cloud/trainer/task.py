@@ -33,7 +33,7 @@ class EvaluationRunHook(tf.train.SessionRunHook):
     """
     def __init__(self,
                  checkpoint_dir,
-                 metric_dict,
+                 metrics,
                  graph,
                  eval_frequency,
                  eval_steps=None,
@@ -42,14 +42,14 @@ class EvaluationRunHook(tf.train.SessionRunHook):
         self._eval_steps = eval_steps
         self._checkpoint_dir = checkpoint_dir
         self._kwargs = kwargs
-        self._eval_every = eval_frequency
-        self._eval_every = 5
+        #self._eval_every = eval_frequency
+        self._eval_every = 1
         self._latest_checkpoint = None
         self._checkpoints_since_eval = 0
         self._graph = graph
 
         with graph.as_default():
-            value_dict, update_dict = tf.contrib.metrics.aggregate_metric_map(metric_dict)
+            value_dict, update_dict = tf.contrib.metrics.aggregate_metric_map(metrics[0])
 
             # Creates a Summary protocol buffer by merging summaries
             self._summary_streaming = tf.summary.merge([
@@ -57,15 +57,9 @@ class EvaluationRunHook(tf.train.SessionRunHook):
                 for name, value_op in value_dict.iteritems()
             ])
 
-            """tf.logging.info(tf.trainable_variables())
-            kernel1 = [v for v in tf.trainable_variables() if v.name == 'conv-1/kernel:0']
-            ker = kernel1[0]
-            ker = tf.slice(ker, [0, 0, 0], [-1, -1, 1])
-            ker = tf.expand_dims(ker, axis=0)
-
-            self._summary_kernels = tf.summary.merge([
-                tf.summary.image('conv-1_kernel1', ker)
-            ])"""
+            self._summary_error = tf.summary.merge([
+                tf.summary.scalar('evaluation_error', metrics[1])
+            ])
 
             # Saver class add ops to save and restore
             # variables to and from checkpoint
@@ -93,7 +87,7 @@ class EvaluationRunHook(tf.train.SessionRunHook):
 
         if self._eval_lock.acquire(False):
             try:
-                if self._checkpoints_since_eval > self._eval_every:
+                if self._checkpoints_since_eval >= self._eval_every:
                     tf.logging.info('running eval after run')
                     self._checkpoints_since_eval = 0
                     self._run_eval()
@@ -140,15 +134,19 @@ class EvaluationRunHook(tf.train.SessionRunHook):
                 eval_step = 0
                 while self._eval_steps is None or eval_step < self._eval_steps:
                     tf.logging.info('Run {}'.format(eval_step))
-                    s_streaming, final_values, _ = session.run([self._summary_streaming,
-                                                                self._final_ops_dict,
-                                                                self._eval_ops])
+                    error_streaming, error_sce, final_values, _ = session.run([
+                        self._summary_streaming,
+                        self._summary_error,
+                        self._final_ops_dict,
+                        self._eval_ops
+                    ])
                     if eval_step % 100 == 0:
                         tf.logging.info("On Evaluation Step: {}".format(eval_step))
                     eval_step += 1
 
             # Write the summaries
-            self._file_writer.add_summary(s_streaming, global_step=train_step)
+            self._file_writer.add_summary(error_streaming, global_step=train_step)
+            self._file_writer.add_summary(error_sce, global_step=train_step)
             self._file_writer.flush()
             tf.logging.info(final_values)
 
@@ -229,7 +227,7 @@ def run(target,
             features, labels = eval_data.raw_input_fn()
             
             # Metric dictionary of evaluation
-            metric_dict = model(
+            metric_dict, error = model(
                 models.EVAL,
                 features,
                 labels,
@@ -238,7 +236,7 @@ def run(target,
 
         hooks = [EvaluationRunHook(
             job_dir,
-            metric_dict,
+            [metric_dict, error],
             evaluation_graph,
             eval_frequency,
             eval_steps=eval_steps
@@ -248,7 +246,8 @@ def run(target,
         hooks = []
   
     # Create a new graph and specify that as default
-    with tf.Graph().as_default():
+    training_graph = tf.Graph()
+    with training_graph.as_default():
     
         with tf.device(tf.train.replica_device_setter()):
             train_data = DataProvider(
@@ -271,6 +270,14 @@ def run(target,
                 labels,
                 learning_rate=learning_rate            
             )
+
+        error_summary = tf.summary.merge([
+            tf.summary.scalar('training_error', train_error)
+        ])
+
+        if is_chief:
+            train_file_writer = tf.summary.FileWriter(
+                os.path.join(job_dir, 'train'), graph=training_graph)
 
         # Creates a MonitoredSession for training
         # MonitoredSession is a Session-like object that handles
@@ -300,86 +307,14 @@ def run(target,
             # When train epochs is reached, coord.should_stop() will be true.
             with coord.stop_on_exception():
                 while (train_steps is None or step < train_steps) and not coord.should_stop():
-                    step, _, error = session.run([global_step_tensor, train_op, train_error])
-                    if step % 500 == 0:
-                        tf.logging.info('Train error: {}'.format(error))
+                    step, _, error = session.run([global_step_tensor, train_op, error_summary])
 
-        # Find the filename of the latest saved checkpoint file
-        # latest_checkpoint = tf.train.latest_checkpoint(job_dir)
+                    if is_chief:
+                        train_file_writer.add_summary(error, global_step=step)
+                        train_file_writer.flush()
+                        if step % 200 == 0:
+                            tf.logging.info('Train error: {}'.format(error))
 
-        # Only perform this if chief
-        """if is_chief:
-            build_and_run_exports(latest_checkpoint,
-                                  job_dir,
-                                  'CSV',
-                                  model.csv_serving_input_fn,
-                                  hidden_units)
-            build_and_run_exports(latest_checkpoint,
-                                  job_dir,
-                                  'JSON',
-                                  model.json_serving_input_fn,
-                                  hidden_units)
-            build_and_run_exports(latest_checkpoint,
-                                  job_dir,
-                                  'EXAMPLE',
-                                  model.example_serving_input_fn,
-                                  hidden_units)"""
-
-        
-"""def build_and_run_exports(latest, job_dir, name, serving_input_fn, hidden_units):
-    Given the latest checkpoint file export the saved model.
-
-    Args:
-        latest (string): Latest checkpoint file
-        job_dir (string): Location of checkpoints and model files
-        name (string): Name of the checkpoint to be exported. Used in building the
-                       export path.
-        hidden_units (list): Number of hidden units
-        learning_rate (float): Learning rate for the SGD
-    
-
-    prediction_graph = tf.Graph()
-    exporter = tf.saved_model.builder.SavedModelBuilder(
-                                            os.path.join(job_dir, 'export', name))
-    
-    with prediction_graph.as_default():
-        features, inputs_dict = serving_input_fn()
-        prediction_dict = model.model_fn(
-            model.PREDICT,
-            features,
-            None,  # labels
-            hidden_units=hidden_units,
-            learning_rate=None  # learning_rate unused in prediction mode
-        )
-        saver = tf.train.Saver()
-
-        inputs_info = {
-            name: tf.saved_model.utils.build_tensor_info(tensor)
-            for name, tensor in inputs_dict.iteritems()
-        }
-        output_info = {
-            name: tf.saved_model.utils.build_tensor_info(tensor)
-            for name, tensor in prediction_dict.iteritems()
-        }
-        signature_def = tf.saved_model.signature_def_utils.build_signature_def(
-            inputs=inputs_info,
-            outputs=output_info,
-            method_name=tf.saved_model.signature_constants.PREDICT_METHOD_NAME
-        )
-
-
-    with tf.Session(graph=prediction_graph) as session:
-        session.run([tf.local_variables_initializer(), tf.tables_initializer()])
-        saver.restore(session, latest)
-        exporter.add_meta_graph_and_variables(
-            session,
-            tags=[tf.saved_model.tag_constants.SERVING],
-            signature_def_map={
-                tf.saved_model.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY: signature_def
-            },
-        )
-
-    exporter.save()"""
 
 
 def dispatch(*args, **kwargs):
@@ -453,8 +388,8 @@ if __name__ == "__main__":
                         """)
     
     parser.add_argument('--eval-steps',
-                        help='Number of steps to run evalution for at each checkpoint',
-                        default=100,
+                        help='Number of steps to run evaluation for at each checkpoint',
+                        default=129,
                         type=int)
     
     parser.add_argument('--train-batch-size',
@@ -473,7 +408,7 @@ if __name__ == "__main__":
                         help='Learning rate for SGD')
   
     parser.add_argument('--eval-frequency',
-                        default=200,
+                        default=1,
                         help='Perform one evaluation per n steps')
   
     parser.add_argument('--eval-num-epochs',
@@ -492,7 +427,7 @@ if __name__ == "__main__":
                         
     parser.add_argument('--num-song-samples',
                         type=int,
-                        default=1310173,
+                        default=465984,
                         help="""\
                         Samples of the songs to be used in the training,
                         evaluation and prediction process.
