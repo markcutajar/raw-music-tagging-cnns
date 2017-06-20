@@ -12,6 +12,39 @@ import multiprocessing
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
+LABELS = ['guitar', 'classical', 'slow', 'techno', 'strings',
+          'drums', 'electronic', 'rock', 'fast', 'piano', 'ambient',
+          'beat', 'violin', 'vocal', 'synth', 'female', 'indian',
+          'opera', 'male', 'singing', 'vocals', 'no vocals', 'harpsichord',
+          'loud', 'quiet', 'flute', 'woman', 'male vocal', 'no vocal',
+          'pop', 'soft', 'sitar', 'solo', 'man', 'classic', 'choir',
+          'voice', 'new age', 'dance', 'male voice', 'female vocal',
+          'beats', 'harp', 'cello', 'no voice', 'weird', 'country',
+          'female voice', 'metal', 'choral', 'electro', 'drum', 'male vocals',
+          'jazz', 'violins', 'eastern', 'female vocals', 'instrumental',
+          'bass', 'modern', 'no piano', 'harpsicord', 'jazzy', 'string',
+          'baroque', 'foreign', 'orchestra', 'hard rock', 'electric', 'trance',
+          'folk', 'chorus', 'chant', 'voices', 'classical guitar', 'spanish',
+          'heavy', 'upbeat', 'no guitar', 'acoustic', 'male singer',
+          'electric guitar', 'electronica', 'oriental', 'funky', 'tribal',
+          'banjo', 'dark', 'medieval', 'man singing', 'organ', 'blues',
+          'irish', 'no singing', 'bells', 'percussion', 'no drums',
+          'woman singing', 'noise', 'spacey', 'singer', 'female singer',
+          'middle eastern', 'chanting', 'no flute', 'low', 'strange', 'calm',
+          'wind', 'lute', 'heavy metal', 'different', 'punk', 'oboe', 'celtic',
+          'sax', 'flutes', 'talking', 'women', 'arabic', 'hard', 'mellow',
+          'funk', 'fast beat', 'house', 'rap', 'not english', 'no violin',
+          'fiddle', 'female opera', 'water', 'india', 'guitars', 'no beat',
+          'chimes', 'drone', 'male opera', 'trumpet', 'duet', 'birds',
+          'industrial', 'sad', 'plucking', 'girl', 'silence', 'men', 'operatic',
+          'horns', 'repetitive', 'airy', 'world', 'eerie', 'deep', 'hip hop',
+          'space', 'light', 'keyboard', 'english', 'not opera', 'not classical',
+          'not rock', 'clapping', 'horn', 'acoustic guitar', 'disco', 'orchestral',
+          'no strings', 'old', 'echo', 'lol', 'soft rock', 'no singer', 'jungle',
+          'bongos', 'reggae', 'monks', 'clarinet', 'scary', 'synthesizer',
+          'female singing', 'piano solo', 'no voices', 'woodwind', 'happy',
+          'viola', 'soprano', 'quick', 'clasical']
+
 
 class DataProvider(object):
 
@@ -22,7 +55,6 @@ class DataProvider(object):
                  num_epochs=None,
                  num_tags=None,
                  selective_tags=None,
-                 merge_tags=None,
                  num_samples=None,
                  data_shape='image',
                  shuffle=True):
@@ -37,8 +69,8 @@ class DataProvider(object):
             If None, and indefinite number is provided.
         :param num_tags: The number of tags in the target tensor
         :param selective_tags: If specific names are given, targets
-            provided in the list only are returned.
-        :param merge_tags: A list of lists of the tags to be merged
+            provided in the list only are returned. If list is
+            rank 2, the ones inside will be merged.
         :param num_samples: Number of samples in the feature tensors
         :param data_shape: The shape of the data. 'flat' for fully
             connected networks and 'image' for convolutional inputs.
@@ -51,7 +83,6 @@ class DataProvider(object):
         self._num_samples = num_samples
         self._data_shape = data_shape
         self._shuffle = shuffle
-        self._merge_tags = merge_tags
 
         """with open(metadata_file, 'r') as f:
             metadata = json.load(f)
@@ -63,6 +94,12 @@ class DataProvider(object):
         self._max_samples = 465984
         self._max_tags = 188
         self._sample_depth = 1
+
+        if self._selective_tags is not None:
+            raise NotImplementedError('Selective tags not implemented')
+
+
+
 
         self._filename_queue = tf.train.string_input_producer(
             filenames, num_epochs=num_epochs)
@@ -92,8 +129,6 @@ class DataProvider(object):
 
 
         # Reduce tags, selective tags, merge tags
-        if self._merge_tags is not None:
-            raise NotImplementedError('Merge tags not implemented yet!')
         if self._selective_tags is not None:
             raise NotImplementedError('Selective tags not implemented yet!')
         else:
