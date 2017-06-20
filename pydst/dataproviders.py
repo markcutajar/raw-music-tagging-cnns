@@ -50,6 +50,7 @@ class DataProvider(object):
         self._data_shape = data_shape
         self._shuffle = shuffle
 
+
         with open(metadata_file, 'r') as f:
             metadata = json.load(f)
 
@@ -107,7 +108,6 @@ class DataProvider(object):
         difference = self._max_samples - num_samples
         start_red = int(difference / 2.0)
         end_red = self._max_samples - start_red
-
         if self._sample_depth == 1:
             song = tf.slice(all_song, [0, start_red], [-1, end_red])
         else:
