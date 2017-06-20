@@ -22,6 +22,7 @@ class DataProvider(object):
                  num_epochs=None,
                  num_tags=None,
                  selective_tags=None,
+                 merge_tags=None,
                  num_samples=None,
                  data_shape='image',
                  shuffle=True):
@@ -32,11 +33,12 @@ class DataProvider(object):
 
         :param filenames: File name and location of tfrecord
         :param batch_size: The size of batches to be provided
-        :param num_epochs: The number of epochs to be returned. If None,
-            and indefinite number is provided.
+        :param num_epochs: The number of epochs to be returned.
+            If None, and indefinite number is provided.
         :param num_tags: The number of tags in the target tensor
         :param selective_tags: If specific names are given, targets
             provided in the list only are returned.
+        :param merge_tags: A list of lists of the tags to be merged
         :param num_samples: Number of samples in the feature tensors
         :param data_shape: The shape of the data. 'flat' for fully
             connected networks and 'image' for convolutional inputs.
@@ -49,6 +51,7 @@ class DataProvider(object):
         self._num_samples = num_samples
         self._data_shape = data_shape
         self._shuffle = shuffle
+        self._merge_tags = merge_tags
 
         """with open(metadata_file, 'r') as f:
             metadata = json.load(f)
@@ -88,7 +91,9 @@ class DataProvider(object):
             all_song = tf.reshape(all_song, [-1, self._num_samples, self._sample_depth])
 
 
-        # Reduce tags or selective
+        # Reduce tags, selective tags, merge tags
+        if self._merge_tags is not None:
+            raise NotImplementedError('Merge tags not implemented yet!')
         if self._selective_tags is not None:
             raise NotImplementedError('Selective tags not implemented yet!')
         else:
@@ -99,6 +104,8 @@ class DataProvider(object):
             else:
                 raise ValueError('target_size must be -1 or > 0')
             tags = tf.slice(all_tags, [0, 0], [-1, target_size])
+
+        # Merge tags if needed
 
         # Reduce samples
         if self._num_samples is None or self._num_samples == -1:
