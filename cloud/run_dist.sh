@@ -1,0 +1,12 @@
+gcloud ml-engine jobs submit training $JOB_NAME \
+--stream-logs \
+--runtime-version 1.0 \
+--job-dir $JOB_DIR \
+--module-name trainer.task \
+--package-path trainer/ \
+--region $REGION \
+-- \
+--train-files $TRAIN_FILE \
+--eval-files $EVAL_FILE \
+--train-steps $TRAIN_STEPS \
+--model-function $MODEL
