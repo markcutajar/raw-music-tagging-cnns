@@ -5,6 +5,7 @@ gcloud ml-engine jobs submit training $JOB_NAME \
 --module-name trainer.task \
 --package-path trainer/ \
 --region $REGION \
+--config $CONFIG \
 -- \
 --train-files $TRAIN_FILE \
 --eval-files $EVAL_FILE \
