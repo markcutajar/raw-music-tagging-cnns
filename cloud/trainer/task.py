@@ -43,7 +43,7 @@ class EvaluationRunHook(tf.train.SessionRunHook):
         self._checkpoint_dir = checkpoint_dir
         self._kwargs = kwargs
         #self._eval_every = eval_frequency
-        self._eval_every = 1
+        self._eval_every = 10
         self._latest_checkpoint = None
         self._checkpoints_since_eval = 0
         self._graph = graph
@@ -133,14 +133,13 @@ class EvaluationRunHook(tf.train.SessionRunHook):
             with coord.stop_on_exception():
                 eval_step = 0
                 while self._eval_steps is None or eval_step < self._eval_steps:
-                    tf.logging.info('Run {}'.format(eval_step))
                     error_streaming, error_sce, final_values, _ = session.run([
                         self._summary_streaming,
                         self._summary_error,
                         self._final_ops_dict,
                         self._eval_ops
                     ])
-                    if eval_step % 100 == 0:
+                    if eval_step % 100 == 0 or eval_step % 0 == 0:
                         tf.logging.info("On Evaluation Step: {}".format(eval_step))
                     eval_step += 1
 
@@ -287,8 +286,8 @@ def run(target,
                                                is_chief=is_chief,
                                                checkpoint_dir=job_dir,
                                                hooks=hooks,
-                                               save_checkpoint_secs=1800,
-                                               save_summaries_steps=1800) as session:
+                                               save_checkpoint_secs=30,
+                                               save_summaries_steps=30) as session:
 
             # Tuple of exceptions that should cause a clean stop of the coordinator
             coord = tf.train.Coordinator(clean_stop_exception_types=(
@@ -312,8 +311,6 @@ def run(target,
                     if is_chief:
                         train_file_writer.add_summary(error, global_step=step)
                         train_file_writer.flush()
-                        if step % 200 == 0:
-                            tf.logging.info('Train error: {}'.format(error))
 
 
 
