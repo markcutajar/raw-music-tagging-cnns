@@ -44,8 +44,8 @@ def dielemanschrauwen256(mode,
     outputs[name] = tf.layers.dense(outputs['fcl-1'], 50, activation=tf.identity, name=name)
     logits = outputs[name]
 
-    prediction_values = tf.nn.sigmoid(logits, name='probabilities')
-    predictions = tf.round(prediction_values, name='prob2tag')
+    #prediction_values = tf.nn.sigmoid(logits, name='probabilities')
+    predictions = tf.nn.relu(logits, name='prob2tag')
 
     if mode in (TRAIN, EVAL):
         global_step = tf.contrib.framework.get_or_create_global_step()
@@ -61,23 +61,23 @@ def dielemanschrauwen256(mode,
         else:
             streaming_metrics = {
                 'false_negatives': tf.contrib.metrics.streaming_false_negatives(
-                    predictions, targets_batch),
+                    predictions, targets_batch, name='false_negatives'),
                 'false_positives': tf.contrib.metrics.streaming_false_positives(
-                    predictions, targets_batch),
+                    predictions, targets_batch, name='false_positives'),
                 'true_positives': tf.contrib.metrics.streaming_true_positives(
-                    predictions, targets_batch),
+                    predictions, targets_batch, name='true_positives'),
                 'true_negatives': tf.contrib.metrics.streaming_true_negatives(
-                    predictions, targets_batch),
+                    predictions, targets_batch, name='true_negatives'),
                 'precision': tf.contrib.metrics.streaming_precision(
-                    predictions, targets_batch),
+                    predictions, targets_batch, name='precision'),
                 'auc': tf.contrib.metrics.streaming_auc(
-                    predictions, targets_batch),
+                    predictions, targets_batch, name='auc'),
                 'accuracy': tf.contrib.metrics.streaming_accuracy(
-                    predictions, targets_batch)
+                    predictions, targets_batch, name='accuracy')
             }
             return streaming_metrics, error
 
     elif mode in (PREDICT):
-        return predictions, prediction_values
+        return predictions #, prediction_values
     else:
         raise ValueError('Mode not found!')
