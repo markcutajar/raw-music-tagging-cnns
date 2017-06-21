@@ -9,6 +9,7 @@ import os
 import json
 import tensorflow as tf
 import multiprocessing
+import numpy as np
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -95,10 +96,26 @@ class DataProvider(object):
         self._max_tags = 188
         self._sample_depth = 1
 
+        # Find indices if selective tags is not None
         if self._selective_tags is not None:
-            raise NotImplementedError('Selective tags not implemented')
+            self._selective_tags = np.asarray(self._selective_tags)
+            labels = np.asarray(LABELS)
 
+            if len(self._selective_tags.shape) == 1:
+                self._selective_tags = np.expand_dims(selective_tags, axis=1)
+            elif len(self._selective_tags.shape) == 2:
+                pass
+            else:
+                raise ValueError('Selective tags need to be at most rank 2. '
+                                 'Shape {} given.'.format(self._selective_tags.shape))
 
+            selective_tag_indices = []
+            for tag_group in self._selective_tags:
+                to_merge = []
+                for tag in tag_group:
+                    to_merge.append(np.where(labels == tag)[0][0])
+                selective_tag_indices.append(to_merge)
+            self._selective_tags = selective_tag_indices
 
 
         self._filename_queue = tf.train.string_input_producer(
@@ -130,7 +147,11 @@ class DataProvider(object):
 
         # Reduce tags, selective tags, merge tags
         if self._selective_tags is not None:
-            raise NotImplementedError('Selective tags not implemented yet!')
+
+            for group in self._selective_tags:
+                for tag in group:
+                    pass
+
         else:
             if self._num_tags is None or self._num_tags == -1:
                 target_size = self._max_tags
