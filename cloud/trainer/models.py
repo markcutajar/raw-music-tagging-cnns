@@ -5,8 +5,7 @@ import tensorflow as tf
 TRAIN, EVAL, PREDICT = 'TRAIN', 'EVAL', 'PREDICT'
 
 
-def dielemanschrauwen256(data_batch,
-                         learning_rate=0.1):
+def dielemanschrauwen256(data_batch):
     
     outputs = {}
 
@@ -42,7 +41,6 @@ def dielemanschrauwen256(data_batch,
     return outputs[name]
 
 
-
 def model_controller(function_name,
                      mode,
                      data_batch,
@@ -55,14 +53,14 @@ def model_controller(function_name,
 
     # Get logits depending if windowed inputs or not
     if window_size:
-        logits_array = tf.map_fn(lambda window: model(window, learning_rate),
-                                elems=data_batch,
-                                back_prop=True,
-                                name='Mapping for window predictions')
+        logits_array = tf.map_fn(lambda window: model(window),
+                                 elems=data_batch,
+                                 back_prop=True,
+                                 name='Mapping for window predictions')
         logits = tf.concat(logits_array, axis=0, name='concat of windowed logits')
     else:
         # Get logits with one call
-        logits = model(data_batch, learning_rate)
+        logits = model(data_batch)
 
     # Get tag predictions
     prediction_values = tf.nn.sigmoid(logits, name='probabilities')
@@ -76,7 +74,7 @@ def model_controller(function_name,
             error = tf.losses.sigmoid_cross_entropy(
                 multi_class_labels=targets_batch, logits=logits)
 
-        if mode in (TRAIN):
+        if mode in TRAIN:
             train_step = tf.train.AdamOptimizer().minimize(error, global_step=global_step)
             return train_step, global_step, error
 
@@ -99,9 +97,7 @@ def model_controller(function_name,
             }
             return streaming_metrics, error
 
-    elif mode in (PREDICT):
+    elif mode in PREDICT:
         return predictions, prediction_values
     else:
         raise ValueError('Mode not found!')
-
-
