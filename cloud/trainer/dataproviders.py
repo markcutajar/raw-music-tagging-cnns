@@ -9,7 +9,7 @@ import os
 import json
 import tensorflow as tf
 import multiprocessing
-import numpy as np
+from tensorflow.python.lib.io import file_io
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -80,7 +80,7 @@ class DataProvider(object):
         """
         self._batch_size = batch_size
         self._num_tags = num_tags
-        self._selective_tags = selective_tags
+
         self._num_samples = num_samples
         self._data_shape = data_shape
         self._shuffle = shuffle
@@ -97,26 +97,29 @@ class DataProvider(object):
         self._sample_depth = 1
 
         # Find indices if selective tags is not None
-        if self._selective_tags is not None:
-            self._selective_tags = np.asarray(self._selective_tags)
-            labels = np.asarray(LABELS)
+        if selective_tags is not None:
+            with file_io.FileIO(selective_tags, 'r') as f:
+                self._selective_tags = json.load(f)['selective_tags']
 
-            if len(self._selective_tags.shape) == 1:
-                self._selective_tags = np.expand_dims(selective_tags, axis=1)
-            elif len(self._selective_tags.shape) == 2:
+            if type(self._selective_tags) == str:
+                expanded_list = []
+                for tag in self._selective_tags:
+                    expanded_list.append([tag])
+                self._selective_tags = expanded_list
+
+            elif type(self._selective_tags) == list:
                 pass
+
             else:
-                raise ValueError('Selective tags need to be at most rank 2. '
-                                 'Shape {} given.'.format(self._selective_tags.shape))
+                raise ValueError('List of strings or list of lists for selective tags')
 
             selective_tag_indices = []
             for tag_group in self._selective_tags:
                 to_merge = []
                 for tag in tag_group:
-                    to_merge.append(np.where(labels == tag)[0][0])
+                    to_merge.append(LABELS.index(tag))
                 selective_tag_indices.append(to_merge)
             self._selective_tags = selective_tag_indices
-
 
         self._filename_queue = tf.train.string_input_producer(
             filenames, num_epochs=num_epochs)
@@ -147,10 +150,15 @@ class DataProvider(object):
 
         # Reduce tags, selective tags, merge tags
         if self._selective_tags is not None:
-
+            selective_group_tags = []
             for group in self._selective_tags:
+                merged_group_tags = []
                 for tag in group:
-                    pass
+                    merged_group_tags.append(tf.slice(all_tags, [0, tag], [-1, 1]))
+                selective_group_tags.append(tf.clip_by_value(tf.add_n(merged_group_tags),
+                                                             tf.constant(0, dtype=tf.float32),
+                                                             tf.constant(1, dtype=tf.float32)))
+            tags = tf.concat(selective_group_tags, axis=1)
 
         else:
             if self._num_tags is None or self._num_tags == -1:
@@ -161,7 +169,6 @@ class DataProvider(object):
                 raise ValueError('target_size must be -1 or > 0')
             tags = tf.slice(all_tags, [0, 0], [-1, target_size])
 
-        # Merge tags if needed
 
         # Reduce samples
         if self._num_samples is None or self._num_samples == -1:
