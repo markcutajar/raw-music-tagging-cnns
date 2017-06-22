@@ -5,9 +5,7 @@ import tensorflow as tf
 TRAIN, EVAL, PREDICT = 'TRAIN', 'EVAL', 'PREDICT'
 
 
-def dielemanschrauwen256(mode,
-                         data_batch,
-                         targets_batch,
+def dielemanschrauwen256(data_batch,
                          learning_rate=0.1):
     
     outputs = {}
@@ -33,20 +31,44 @@ def dielemanschrauwen256(mode,
     name = 'maxp-2'
     outputs[name] = tf.layers.max_pooling1d(outputs['conv-2'], pool_size=4, strides=1, name=name)
 
-
     name = 'fcl-1'
     outputs[name] = tf.layers.dense(tf.reshape(outputs['maxp-2'],
                                                [int(outputs['maxp-2'].shape[0]), -1]),
                                     100, activation=tf.nn.relu, name=name)
 
-
     name = 'fcl-2'
     outputs[name] = tf.layers.dense(outputs['fcl-1'], 29, activation=tf.identity, name=name)
-    logits = outputs[name]
 
-    #prediction_values = tf.nn.sigmoid(logits, name='probabilities')
-    predictions = tf.nn.relu(logits, name='prob2tag')
+    return outputs[name]
 
+
+
+def model_controller(function_name,
+                     mode,
+                     data_batch,
+                     targets_batch,
+                     learning_rate=0.1,
+                     window_size=False):
+
+    # Load model
+    model = getattr(globals()['models'](), function_name)
+
+    # Get logits depending if windowed inputs or not
+    if window_size:
+        logits_array = tf.map_fn(lambda window: model(window, learning_rate),
+                                elems=data_batch,
+                                back_prop=True,
+                                name='Mapping for window predictions')
+        logits = tf.concat(logits_array, axis=0, name='concat of windowed logits')
+    else:
+        # Get logits with one call
+        logits = model(data_batch, learning_rate)
+
+    # Get tag predictions
+    prediction_values = tf.nn.sigmoid(logits, name='probabilities')
+    predictions = tf.round(prediction_values)
+
+    # Get errors and accuracies
     if mode in (TRAIN, EVAL):
         global_step = tf.contrib.framework.get_or_create_global_step()
         name = 'error'
@@ -78,37 +100,8 @@ def dielemanschrauwen256(mode,
             return streaming_metrics, error
 
     elif mode in (PREDICT):
-        return predictions #, prediction_values
+        return predictions, prediction_values
     else:
         raise ValueError('Mode not found!')
 
-
-def model_controller(function_name,
-                     mode,
-                     data_batch,
-                     targets_batch,
-                     learning_rate=0.1,
-                     window_size=False):
-
-    # Load model
-    model = getattr(function_name)
-
-    if window_size:
-        # Get logits with windowing map_fn function
-        logits_array = tf.map_fn(lambda window: model(window, learning_rate),
-                                elems=data_batch,
-                                back_prop=True,
-                                name='Mapping for window predictions')
-
-        # Merge logits
-
-    else:
-        # Get logits with one call
-        logits = model(data_batch, learning_rate)
-
-    # Get predictions
-
-    # Find error
-
-    # Train etc
 
