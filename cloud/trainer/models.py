@@ -41,7 +41,7 @@ def dielemanschrauwen256(mode,
 
 
     name = 'fcl-2'
-    outputs[name] = tf.layers.dense(outputs['fcl-1'], 50, activation=tf.identity, name=name)
+    outputs[name] = tf.layers.dense(outputs['fcl-1'], 29, activation=tf.identity, name=name)
     logits = outputs[name]
 
     #prediction_values = tf.nn.sigmoid(logits, name='probabilities')
