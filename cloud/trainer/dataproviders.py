@@ -24,6 +24,7 @@ class DataProvider(object):
                  selective_tags=None,
                  num_samples=None,
                  data_shape='image',
+                 window_size=None,
                  shuffle=True):
 
         """Class to load the data and provide batches to
@@ -46,6 +47,7 @@ class DataProvider(object):
         """
         self._batch_size = batch_size
         self._num_tags = num_tags
+        self._window_size = window_size
 
         self._num_samples = num_samples
         self._data_shape = data_shape
@@ -110,7 +112,6 @@ class DataProvider(object):
         if self._sample_depth != 1:
             all_song = tf.reshape(all_song, [-1, self._num_samples, self._sample_depth])
 
-
         # Reduce tags, selective tags, merge tags
         if self._selective_tags is not None:
             selective_group_tags = []
@@ -132,8 +133,8 @@ class DataProvider(object):
                 raise ValueError('target_size must be -1 or > 0')
             tags = tf.slice(all_tags, [0, 0], [-1, target_size])
 
-
-        # Reduce samples
+        # Reduce samples depending on num_samples
+        # This is not definite if window_size is given
         if self._num_samples is None or self._num_samples == -1:
             num_samples = self._max_samples
         elif self._num_samples > 1:
@@ -149,6 +150,14 @@ class DataProvider(object):
         else:
             song = tf.slice(all_song, [0, start_red, 0], [-1, end_red, -1])
 
+        # If window_size is not none check even samples and reduce
+        # appropriately.
+        if self._window_size is not None:
+            # window_size is samples per window
+            # Int wil floor the float number
+            samples_to_keep = (int(num_samples / self._window_size) * self._window_size)
+            song = tf.slice(song, [0, 0], [-1, samples_to_keep])
+
         # Shuffle
         if self._shuffle:
             song, tags = tf.train.shuffle_batch(
@@ -159,17 +168,27 @@ class DataProvider(object):
                 min_after_dequeue=10,
                 enqueue_many=True)
 
-        # Return depending on shape
+        # Reshape depending on shape parameter
         if self._data_shape == 'flat':
             if self._sample_depth == 1:
-                return song, tags
+                feats = song
             else:
-                return tf.reshape(song, [-1, self._sample_depth * num_samples]), tags
-
+                feats = tf.reshape(song, [-1, self._sample_depth * num_samples])
         elif self._data_shape == 'image':
             if self._sample_depth == 1:
-                return tf.expand_dims(song, axis=2), tags
+                feats = tf.expand_dims(song, axis=2)
             else:
-                return tf.expand_dims(song, axis=3), tags
+                feats = tf.expand_dims(song, axis=3)
         else:
             raise ValueError('Shape not recognized!')
+
+
+        # Create windows depending on window_size parameter
+        if self._window_size is not None:
+            num_windows = int(num_samples / self._window_size)
+            feats = tf.split(value=feats,
+                             num_or_size_splits=num_windows,
+                             axis=1,
+                             name='window_splitter')
+
+        return feats, tags
