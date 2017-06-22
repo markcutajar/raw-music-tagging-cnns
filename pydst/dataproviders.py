@@ -12,6 +12,39 @@ import multiprocessing
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
+LABELS = ['guitar', 'classical', 'slow', 'techno', 'strings',
+          'drums', 'electronic', 'rock', 'fast', 'piano', 'ambient',
+          'beat', 'violin', 'vocal', 'synth', 'female', 'indian',
+          'opera', 'male', 'singing', 'vocals', 'no vocals', 'harpsichord',
+          'loud', 'quiet', 'flute', 'woman', 'male vocal', 'no vocal',
+          'pop', 'soft', 'sitar', 'solo', 'man', 'classic', 'choir',
+          'voice', 'new age', 'dance', 'male voice', 'female vocal',
+          'beats', 'harp', 'cello', 'no voice', 'weird', 'country',
+          'female voice', 'metal', 'choral', 'electro', 'drum', 'male vocals',
+          'jazz', 'violins', 'eastern', 'female vocals', 'instrumental',
+          'bass', 'modern', 'no piano', 'harpsicord', 'jazzy', 'string',
+          'baroque', 'foreign', 'orchestra', 'hard rock', 'electric', 'trance',
+          'folk', 'chorus', 'chant', 'voices', 'classical guitar', 'spanish',
+          'heavy', 'upbeat', 'no guitar', 'acoustic', 'male singer',
+          'electric guitar', 'electronica', 'oriental', 'funky', 'tribal',
+          'banjo', 'dark', 'medieval', 'man singing', 'organ', 'blues',
+          'irish', 'no singing', 'bells', 'percussion', 'no drums',
+          'woman singing', 'noise', 'spacey', 'singer', 'female singer',
+          'middle eastern', 'chanting', 'no flute', 'low', 'strange', 'calm',
+          'wind', 'lute', 'heavy metal', 'different', 'punk', 'oboe', 'celtic',
+          'sax', 'flutes', 'talking', 'women', 'arabic', 'hard', 'mellow',
+          'funk', 'fast beat', 'house', 'rap', 'not english', 'no violin',
+          'fiddle', 'female opera', 'water', 'india', 'guitars', 'no beat',
+          'chimes', 'drone', 'male opera', 'trumpet', 'duet', 'birds',
+          'industrial', 'sad', 'plucking', 'girl', 'silence', 'men', 'operatic',
+          'horns', 'repetitive', 'airy', 'world', 'eerie', 'deep', 'hip hop',
+          'space', 'light', 'keyboard', 'english', 'not opera', 'not classical',
+          'not rock', 'clapping', 'horn', 'acoustic guitar', 'disco', 'orchestral',
+          'no strings', 'old', 'echo', 'lol', 'soft rock', 'no singer', 'jungle',
+          'bongos', 'reggae', 'monks', 'clarinet', 'scary', 'synthesizer',
+          'female singing', 'piano solo', 'no voices', 'woodwind', 'happy',
+          'viola', 'soprano', 'quick', 'clasical']
+
 
 class DataProvider(object):
 
@@ -32,11 +65,12 @@ class DataProvider(object):
 
         :param filenames: File name and location of tfrecord
         :param batch_size: The size of batches to be provided
-        :param num_epochs: The number of epochs to be returned. If None,
-            and indefinite number is provided.
+        :param num_epochs: The number of epochs to be returned.
+            If None, and indefinite number is provided.
         :param num_tags: The number of tags in the target tensor
         :param selective_tags: If specific names are given, targets
-            provided in the list only are returned.
+            provided in the list only are returned. If list is
+            rank 2, the ones inside will be merged.
         :param num_samples: Number of samples in the feature tensors
         :param data_shape: The shape of the data. 'flat' for fully
             connected networks and 'image' for convolutional inputs.
@@ -45,19 +79,46 @@ class DataProvider(object):
         """
         self._batch_size = batch_size
         self._num_tags = num_tags
-        self._selective_tags = selective_tags
+
         self._num_samples = num_samples
         self._data_shape = data_shape
         self._shuffle = shuffle
 
-
-        with open(metadata_file, 'r') as f:
+        """with open(metadata_file, 'r') as f:
             metadata = json.load(f)
-
         self._label_map = metadata['label_map']
         self._max_samples = metadata['max_num_samples']
         self._max_tags = metadata['max_num_tags']
-        self._sample_depth = metadata['sample_depth']
+        self._sample_depth = metadata['sample_depth']"""
+
+        self._max_samples = 465984
+        self._max_tags = 188
+        self._sample_depth = 1
+
+        # Find indices if selective tags is not None
+        if selective_tags is not None:
+            with open(selective_tags, 'r') as f:
+                self._selective_tags = json.load(f)['selective_tags']
+
+            if type(self._selective_tags) == str:
+                expanded_list = []
+                for tag in self._selective_tags:
+                    expanded_list.append([tag])
+                self._selective_tags = expanded_list
+
+            elif type(self._selective_tags) == list:
+                pass
+
+            else:
+                raise ValueError('List of strings or list of lists for selective tags')
+
+            selective_tag_indices = []
+            for tag_group in self._selective_tags:
+                to_merge = []
+                for tag in tag_group:
+                    to_merge.append(LABELS.index(tag))
+                selective_tag_indices.append(to_merge)
+            self._selective_tags = selective_tag_indices
 
         self._filename_queue = tf.train.string_input_producer(
             filenames, num_epochs=num_epochs)
@@ -86,9 +147,19 @@ class DataProvider(object):
             all_song = tf.reshape(all_song, [-1, self._num_samples, self._sample_depth])
 
 
-        # Reduce tags or selective
+        # Reduce tags, selective tags, merge tags
         if self._selective_tags is not None:
-            raise NotImplementedError('Selective tags not implemented yet!')
+            selective_group_tags = []
+            for group in self._selective_tags:
+                merged_group_tags = []
+                for tag in group:
+                    merged_group_tags.append(tf.slice(all_tags, [0, tag], [-1, 1]))
+                selective_group_tags.append(tf.clip_by_value(tf.add_n(merged_group_tags),
+                                                             tf.constant(0, dtype=tf.float32),
+                                                             tf.constant(1, dtype=tf.float32)))
+
+            tags = tf.concat(selective_group_tags, axis=1)
+
         else:
             if self._num_tags is None or self._num_tags == -1:
                 target_size = self._max_tags
@@ -97,6 +168,7 @@ class DataProvider(object):
             else:
                 raise ValueError('target_size must be -1 or > 0')
             tags = tf.slice(all_tags, [0, 0], [-1, target_size])
+
 
         # Reduce samples
         if self._num_samples is None or self._num_samples == -1:
@@ -108,6 +180,7 @@ class DataProvider(object):
         difference = self._max_samples - num_samples
         start_red = int(difference / 2.0)
         end_red = self._max_samples - start_red
+
         if self._sample_depth == 1:
             song = tf.slice(all_song, [0, start_red], [-1, end_red])
         else:
@@ -128,7 +201,7 @@ class DataProvider(object):
             if self._sample_depth == 1:
                 return song, tags
             else:
-                return tf.reshape(song, [-1, self._sample_depth * self._num_samples]), tags
+                return tf.reshape(song, [-1, self._sample_depth * num_samples]), tags
 
         elif self._data_shape == 'image':
             if self._sample_depth == 1:
