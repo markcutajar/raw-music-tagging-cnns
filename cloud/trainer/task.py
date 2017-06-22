@@ -166,6 +166,7 @@ def run(target,
         eval_num_epochs,
         num_epochs,
         target_size,
+        selective_tags,
         num_song_samples,
         data_shape):
 
@@ -217,6 +218,7 @@ def run(target,
                 metadata_files,
                 batch_size=eval_batch_size,
                 num_epochs=eval_num_epochs,
+                selective_tags=selective_tags,
                 num_tags=target_size,
                 num_samples=num_song_samples,
                 data_shape=data_shape
@@ -254,6 +256,7 @@ def run(target,
                 metadata_files,
                 batch_size=train_batch_size,
                 num_epochs=num_epochs,
+                selective_tags = selective_tags,
                 num_tags=target_size,
                 num_samples=num_song_samples,
                 data_shape=data_shape
@@ -421,6 +424,10 @@ if __name__ == "__main__":
                         type=int,
                         default=50,
                         help='Number of tags to be used as an output')
+
+    parser.add_argument('--selective-tags',
+                        type=str,
+                        help='Path to selective tag file')
                         
     parser.add_argument('--num-song-samples',
                         type=int,
