@@ -13,40 +13,6 @@ from tensorflow.python.lib.io import file_io
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-LABELS = ['guitar', 'classical', 'slow', 'techno', 'strings',
-          'drums', 'electronic', 'rock', 'fast', 'piano', 'ambient',
-          'beat', 'violin', 'vocal', 'synth', 'female', 'indian',
-          'opera', 'male', 'singing', 'vocals', 'no vocals', 'harpsichord',
-          'loud', 'quiet', 'flute', 'woman', 'male vocal', 'no vocal',
-          'pop', 'soft', 'sitar', 'solo', 'man', 'classic', 'choir',
-          'voice', 'new age', 'dance', 'male voice', 'female vocal',
-          'beats', 'harp', 'cello', 'no voice', 'weird', 'country',
-          'female voice', 'metal', 'choral', 'electro', 'drum', 'male vocals',
-          'jazz', 'violins', 'eastern', 'female vocals', 'instrumental',
-          'bass', 'modern', 'no piano', 'harpsicord', 'jazzy', 'string',
-          'baroque', 'foreign', 'orchestra', 'hard rock', 'electric', 'trance',
-          'folk', 'chorus', 'chant', 'voices', 'classical guitar', 'spanish',
-          'heavy', 'upbeat', 'no guitar', 'acoustic', 'male singer',
-          'electric guitar', 'electronica', 'oriental', 'funky', 'tribal',
-          'banjo', 'dark', 'medieval', 'man singing', 'organ', 'blues',
-          'irish', 'no singing', 'bells', 'percussion', 'no drums',
-          'woman singing', 'noise', 'spacey', 'singer', 'female singer',
-          'middle eastern', 'chanting', 'no flute', 'low', 'strange', 'calm',
-          'wind', 'lute', 'heavy metal', 'different', 'punk', 'oboe', 'celtic',
-          'sax', 'flutes', 'talking', 'women', 'arabic', 'hard', 'mellow',
-          'funk', 'fast beat', 'house', 'rap', 'not english', 'no violin',
-          'fiddle', 'female opera', 'water', 'india', 'guitars', 'no beat',
-          'chimes', 'drone', 'male opera', 'trumpet', 'duet', 'birds',
-          'industrial', 'sad', 'plucking', 'girl', 'silence', 'men', 'operatic',
-          'horns', 'repetitive', 'airy', 'world', 'eerie', 'deep', 'hip hop',
-          'space', 'light', 'keyboard', 'english', 'not opera', 'not classical',
-          'not rock', 'clapping', 'horn', 'acoustic guitar', 'disco', 'orchestral',
-          'no strings', 'old', 'echo', 'lol', 'soft rock', 'no singer', 'jungle',
-          'bongos', 'reggae', 'monks', 'clarinet', 'scary', 'synthesizer',
-          'female singing', 'piano solo', 'no voices', 'woodwind', 'happy',
-          'viola', 'soprano', 'quick', 'clasical']
-
-
 class DataProvider(object):
 
     def __init__(self,
@@ -85,16 +51,13 @@ class DataProvider(object):
         self._data_shape = data_shape
         self._shuffle = shuffle
 
-        """with open(metadata_file, 'r') as f:
+        with file_io.FileIO(metadata_file, 'r') as f:
             metadata = json.load(f)
+
         self._label_map = metadata['label_map']
         self._max_samples = metadata['max_num_samples']
         self._max_tags = metadata['max_num_tags']
-        self._sample_depth = metadata['sample_depth']"""
-
-        self._max_samples = 465984
-        self._max_tags = 188
-        self._sample_depth = 1
+        self._sample_depth = metadata['sample_depth']
 
         # Find indices if selective tags is not None
         if selective_tags is not None:
@@ -117,7 +80,7 @@ class DataProvider(object):
             for tag_group in self._selective_tags:
                 to_merge = []
                 for tag in tag_group:
-                    to_merge.append(LABELS.index(tag))
+                    to_merge.append(self._label_map.index(tag))
                 selective_tag_indices.append(to_merge)
             self._selective_tags = selective_tag_indices
 
