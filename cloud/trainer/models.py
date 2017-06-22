@@ -81,3 +81,34 @@ def dielemanschrauwen256(mode,
         return predictions #, prediction_values
     else:
         raise ValueError('Mode not found!')
+
+
+def model_controller(function_name,
+                     mode,
+                     data_batch,
+                     targets_batch,
+                     learning_rate=0.1,
+                     window_size=False):
+
+    # Load model
+    model = getattr(function_name)
+
+    if window_size:
+        # Get logits with windowing map_fn function
+        logits_array = tf.map_fn(lambda window: model(window, learning_rate),
+                                elems=data_batch,
+                                back_prop=True,
+                                name='Mapping for window predictions')
+
+        # Merge logits
+
+    else:
+        # Get logits with one call
+        logits = model(data_batch, learning_rate)
+
+    # Get predictions
+
+    # Find error
+
+    # Train etc
+
