@@ -10,5 +10,6 @@ gcloud ml-engine jobs submit training $JOB_NAME \
 --train-files $TRAIN_FILE \
 --eval-files $EVAL_FILE \
 --train-steps $TRAIN_STEPS \
+--metadata-files $METDATA_FILE \
 --model-function $MODEL \
 --selective-tags $SELTAGS
