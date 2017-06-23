@@ -4,7 +4,8 @@ gcloud ml-engine local train --package-path trainer \
 --train-files $TRAIN_FILE \
 --eval-files $EVAL_FILE \
 --job-dir $JOB_DIR \
---metadata-files $METDATA_FILE \
+--metadata-files $METADATA_FILE \
 --train-steps $TRAIN_STEPS \
 --selective-tags $SELTAGS \
---model-function $MODEL
+--model-function $MODEL \
+--window-size $WINDOW_SIZE
