@@ -1,0 +1,3 @@
+TEST INFO
+
+<location[local(l)/cloud(c)]>run_<modelname>_w<window in seconds>
