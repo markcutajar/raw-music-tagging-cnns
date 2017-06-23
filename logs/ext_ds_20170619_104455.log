@@ -1,8 +1,0 @@
-INFO:2017-06-19 11:44:57,402:__main__:Extracted tags and names into arrays
-INFO:2017-06-19 11:44:57,404:__main__:Label_map 188, mp3_files 25860, targets (25860, 188), tids (25860,)
-INFO:2017-06-19 11:44:57,435:__main__:Shuffled targets, mp3 files and tids
-INFO:2017-06-19 11:44:57,435:__main__:Number of samples reduced
-INFO:2017-06-19 11:44:57,498:__main__:Tags sorted according to frequency
-INFO:2017-06-19 11:44:57,499:__main__:Data separated and merged into dictionaries
-INFO:2017-06-19 13:18:58,124:__main__:Data extracted from mp3 files and saved
-INFO:2017-06-19 13:18:58,127:__main__:Extracted the metadata and saved tfrecord files
