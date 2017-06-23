@@ -4,7 +4,7 @@ import tensorflow as tf
 
 TRAIN, EVAL, PREDICT = 'TRAIN', 'EVAL', 'PREDICT'
 
-def dielemanschrauwen256(data_batch):
+def ds256(data_batch):
     
     outputs = {}
     name = 'strided-conv'
