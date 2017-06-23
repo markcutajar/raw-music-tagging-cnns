@@ -168,6 +168,7 @@ def run(target,
         target_size,
         selective_tags,
         num_song_samples,
+        window_size,
         data_shape):
 
     """Run the training and evaluation graph.
@@ -197,8 +198,6 @@ def run(target,
         data_shape (string): Shape of data - depending on the model used
     """
 
-    model = getattr(models, model_function)
-    
     # If the server is chief which is `master`
     # In between graph replication Chief is one node in
     # the cluster with extra responsibility and by default
@@ -221,6 +220,7 @@ def run(target,
                 selective_tags=selective_tags,
                 num_tags=target_size,
                 num_samples=num_song_samples,
+                window_size=window_size,
                 data_shape=data_shape
             )
             
@@ -228,11 +228,13 @@ def run(target,
             features, labels = eval_data.raw_input_fn()
             
             # Metric dictionary of evaluation
-            metric_dict, error = model(
+            metric_dict, error = models.controller(
+                model_function,
                 models.EVAL,
                 features,
                 labels,
-                learning_rate=learning_rate
+                learning_rate=learning_rate,
+                window=bool(window_size)
             )
 
         hooks = [EvaluationRunHook(
@@ -259,6 +261,7 @@ def run(target,
                 selective_tags = selective_tags,
                 num_tags=target_size,
                 num_samples=num_song_samples,
+                window_size=window_size,
                 data_shape=data_shape
             )
             
@@ -266,11 +269,13 @@ def run(target,
             features, labels = train_data.raw_input_fn()
             
             # Metric 
-            [train_op, global_step_tensor, train_error] = model(
+            [train_op, global_step_tensor, train_error] = models.controller(
+                model_function,
                 models.TRAIN,
                 features,
                 labels,
-                learning_rate=learning_rate            
+                learning_rate=learning_rate,
+                window=bool(window_size)
             )
 
         error_summary = tf.summary.merge([
@@ -436,6 +441,14 @@ if __name__ == "__main__":
                         Samples of the songs to be used in the training,
                         evaluation and prediction process.
                         """)
+
+    parser.add_argument('--window-size',
+                        type=int,
+                        default=None,
+                        help="""\
+                            Number of samples in one window. If None is 
+                            given, no windowing is used.
+                            """)
 
     parser.add_argument('--data-shape',
                         type=str,
