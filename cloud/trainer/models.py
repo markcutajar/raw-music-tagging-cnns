@@ -44,7 +44,7 @@ def ds256(data_batch):
 
     name = 'fcl-2'
     names.append(name)
-    outputs[name] = tf.layers.dense(outputs['fcl-1'], 29, activation=tf.identity, name=name)
+    outputs[name] = tf.layers.dense(outputs['fcl-1'], 50, activation=tf.identity, name=name)
     return outputs[name]
 
 
@@ -133,17 +133,16 @@ def perclass_metrics(predictions,
 
     perclass_dict={}
     for idx, pred_tag in enumerate(predictions_per_tag_list):
-        perclass_dict[str(idx)] = {}
-        perclass_dict[str(idx)]['false_negatives'] = tf.contrib.metrics.streaming_false_negatives(
+        perclass_dict[str(idx)+'_false_negatives'] = tf.contrib.metrics.streaming_false_negatives(
             pred_tag, targets_per_tag_list[idx], name='false_negatives')
 
-        perclass_dict[str(idx)]['precision'] = tf.contrib.metrics.streaming_precision(
+        perclass_dict[str(idx)+'_precision'] = tf.contrib.metrics.streaming_precision(
             pred_tag, targets_per_tag_list[idx], name='precision')
 
-        perclass_dict[str(idx)]['aucroc'] = tf.contrib.metrics.streaming_auc(
+        perclass_dict[str(idx)+'_aucroc'] = tf.contrib.metrics.streaming_auc(
             pred_tag, targets_per_tag_list[idx], name='aucroc')
 
-        perclass_dict[str(idx)]['aucpr'] = tf.contrib.metrics.streaming_auc(
+        perclass_dict[str(idx)+'_aucpr'] = tf.contrib.metrics.streaming_auc(
             pred_tag, targets_per_tag_list[idx], curve='PR', name='aucpr')
 
     return perclass_dict
