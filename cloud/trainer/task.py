@@ -12,10 +12,10 @@
 import argparse
 import json
 import os
-import trainer.models as models
+from . import models as models
 import threading
 import tensorflow as tf
-from trainer.dataproviders import DataProvider
+from .dataproviders import DataProvider
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -42,24 +42,36 @@ class EvaluationRunHook(tf.train.SessionRunHook):
         self._eval_steps = eval_steps
         self._checkpoint_dir = checkpoint_dir
         self._kwargs = kwargs
-        #self._eval_every = eval_frequency
+        # self._eval_every = eval_frequency
         self._eval_every = 10
         self._latest_checkpoint = None
         self._checkpoints_since_eval = 0
         self._graph = graph
 
         with graph.as_default():
-            value_dict, update_dict = tf.contrib.metrics.aggregate_metric_map(metrics[0])
 
-            # Creates a Summary protocol buffer by merging summaries
+            value_dict, update_dict = tf.contrib.metrics.aggregate_metric_map(metrics['stream'])
             self._summary_streaming = tf.summary.merge([
                 tf.summary.scalar(name, value_op)
                 for name, value_op in value_dict.iteritems()
             ])
 
             self._summary_error = tf.summary.merge([
-                tf.summary.scalar('evaluation_error', metrics[1])
+                tf.summary.scalar(name, value_op)
+                for name, value_op in metrics['scalar'].iteritems()
             ])
+
+            perclass_summaries = []
+            for name, value_op in metrics['perclass'].iteritems():
+                for metric_name, metric_value in value_op.iteritems():
+                    perclass_summaries.append(
+                        tf.summary.scalar(name + '_' + metric_name, metric_value))
+            self._summary_perclass = tf.summary.merge([perclass_summaries])
+
+            variables_summaries = []
+            for var in self._graph.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
+                variables_summaries.append(tf.summary.histogram(var.name, var))
+            self._summary_variables = tf.summary.merge([variables_summaries])
 
             # Saver class add ops to save and restore
             # variables to and from checkpoint
@@ -133,9 +145,11 @@ class EvaluationRunHook(tf.train.SessionRunHook):
             with coord.stop_on_exception():
                 eval_step = 0
                 while self._eval_steps is None or eval_step < self._eval_steps:
-                    error_streaming, error_sce, final_values, _ = session.run([
+                    stream_metrics, error_sce, pc_metrics, variables, final_values, _ = session.run([
                         self._summary_streaming,
                         self._summary_error,
+                        self._summary_perclass,
+                        self._summary_variables,
                         self._final_ops_dict,
                         self._eval_ops
                     ])
@@ -143,9 +157,11 @@ class EvaluationRunHook(tf.train.SessionRunHook):
                         tf.logging.info("On Evaluation Step: {}".format(eval_step))
                     eval_step += 1
 
-            # Write the summaries
-            self._file_writer.add_summary(error_streaming, global_step=train_step)
+            # Write the summaries, save results and log
+            self._file_writer.add_summary(stream_metrics, global_step=train_step)
             self._file_writer.add_summary(error_sce, global_step=train_step)
+            self._file_writer.add_summary(pc_metrics, global_step=train_step)
+            self._file_writer.add_summary(variables, global_step=train_step)
             self._file_writer.flush()
             tf.logging.info(final_values)
 
@@ -186,15 +202,18 @@ def run(target,
         eval_batch_size (int): Batch size for evaluation
         learning_rate (float): Learning rate for Gradient Descent
         eval_frequency (int): Run evaluation frequency every n training steps.
-                          Do not evaluate too frequently otherwise you will
-                          pay for performance and do not evaluate too in-frequently
-                          otherwise you will not know how soon to stop training.
-                          Use default values to start with
+            Do not evaluate too frequently otherwise you will
+            pay for performance and do not evaluate too in-frequently
+            otherwise you will not know how soon to stop training.
+            Use default values to start with
         model_function (str): Function name to be loaded and used to build the graph
         eval_num_epochs (int): Number of epochs during evaluation
         num_epochs (int): Maximum number of training data epochs on which to train
         target_size (int): The number of tags being use as an output
+        selective_tags (filename): Filename for selective tags in json
         num_song_samples (int): Samples from the songs to be used for training
+        window_size (int): Number of samples to be used in a window. If None,
+            no windowing will be used.
         data_shape (string): Shape of data - depending on the model used
     """
 
@@ -228,7 +247,7 @@ def run(target,
             features, labels = eval_data.raw_input_fn()
             
             # Metric dictionary of evaluation
-            metric_dict, error = models.controller(
+            metrics = models.controller(
                 model_function,
                 models.EVAL,
                 features,
@@ -239,7 +258,7 @@ def run(target,
 
         hooks = [EvaluationRunHook(
             job_dir,
-            [metric_dict, error],
+            metrics,
             evaluation_graph,
             eval_frequency,
             eval_steps=eval_steps
@@ -258,7 +277,7 @@ def run(target,
                 metadata_files,
                 batch_size=train_batch_size,
                 num_epochs=num_epochs,
-                selective_tags = selective_tags,
+                selective_tags=selective_tags,
                 num_tags=target_size,
                 num_samples=num_song_samples,
                 window_size=window_size,
@@ -319,7 +338,6 @@ def run(target,
                     if is_chief:
                         train_file_writer.add_summary(error, global_step=step)
                         train_file_writer.flush()
-
 
 
 def dispatch(*args, **kwargs):
