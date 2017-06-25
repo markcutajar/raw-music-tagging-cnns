@@ -8,6 +8,7 @@ METADATA_FILE=gs://magnatagatune_dataset/raw_metadata.json
 TRAIN_STEPS=22000
 REGION=us-east1
 CONFIG=config.yaml
+SELECTIVE_TAGS=gs://magnatagatune_dataset/selective_tags.json
 
 gcloud ml-engine jobs submit training $JOB_NAME \
 --stream-logs \
@@ -22,4 +23,5 @@ gcloud ml-engine jobs submit training $JOB_NAME \
 --eval-files $EVAL_FILE \
 --train-steps $TRAIN_STEPS \
 --metadata-files $METDATA_FILE \
---model-function $MODEL
+--model-function $MODEL \
+--selective-tags $SELECTIVE_TAGS
