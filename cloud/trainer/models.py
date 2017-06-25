@@ -59,10 +59,10 @@ def controller(function_name,
                         predictions, targets_batch, name='true_negatives'),
                     'precision': tf.contrib.metrics.streaming_precision(
                         predictions, targets_batch, name='precision'),
-                    'auc': tf.contrib.metrics.streaming_auc(
-                        predictions, targets_batch, name='auc'),
-                    'accuracy': tf.contrib.metrics.streaming_accuracy(
-                        predictions, targets_batch, name='accuracy')
+                    'aucroc': tf.contrib.metrics.streaming_auc(
+                        predictions, targets_batch, name='aucroc'),
+                    'aucpr': tf.contrib.metrics.streaming_auc(
+                        predictions, targets_batch, curve='PR', name='aucpr')
                 }
                 scalar_metrics = {
                     'evaluation_error': error
@@ -91,6 +91,9 @@ def perclass_metrics(predictions,
     for idx, pred_tag in enumerate(predictions_per_tag_list):
         perclass_dict[str(idx)+'_false_negatives'] = tf.contrib.metrics.streaming_false_negatives(
             pred_tag, targets_per_tag_list[idx], name='false_negatives')
+
+        perclass_dict[str(idx)+'_false_positives'] = tf.contrib.metrics.streaming_false_positives(
+            pred_tag, targets_per_tag_list[idx], name='false_positives')
 
         perclass_dict[str(idx)+'_precision'] = tf.contrib.metrics.streaming_precision(
             pred_tag, targets_per_tag_list[idx], name='precision')
