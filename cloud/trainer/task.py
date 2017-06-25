@@ -20,6 +20,9 @@ from .dataproviders import DataProvider
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.logging.set_verbosity(tf.logging.INFO)
 
+TRAIN_CHECKPOINT = 10
+TRAIN_SUMMARIES = 10
+CHECKPOINT_PER_EVAL = 5
 
 class EvaluationRunHook(tf.train.SessionRunHook):
     """EvaluationRunHook performs continuous evaluation of the model.
@@ -43,35 +46,35 @@ class EvaluationRunHook(tf.train.SessionRunHook):
         self._checkpoint_dir = checkpoint_dir
         self._kwargs = kwargs
         # self._eval_every = eval_frequency
-        self._eval_every = 10
+        self._eval_every = CHECKPOINT_PER_EVAL
         self._latest_checkpoint = None
         self._checkpoints_since_eval = 0
         self._graph = graph
 
         with graph.as_default():
 
-            value_dict, update_dict = tf.contrib.metrics.aggregate_metric_map(metrics['stream'])
-            self._summary_streaming = tf.summary.merge([
+            stream_value_dict, stream_update_dict = tf.contrib.metrics.aggregate_metric_map(metrics['stream'])
+            stream_metrics = [
                 tf.summary.scalar(name, value_op)
-                for name, value_op in value_dict.iteritems()
-            ])
+                for name, value_op in stream_value_dict.iteritems()
+            ]
 
-            self._summary_error = tf.summary.merge([
+            perclass_value_dict, perclass_update_dict = tf.contrib.metrics.aggregate_metric_map(metrics['perclass'])
+            perclass_metrics = [
+                tf.summary.scalar(name, value_op)
+                for name, value_op in perclass_value_dict.iteritems()
+            ]
+
+            other_scalars = [
                 tf.summary.scalar(name, value_op)
                 for name, value_op in metrics['scalar'].iteritems()
-            ])
+            ]
 
-            perclass_summaries = []
-            for name, value_op in metrics['perclass'].iteritems():
-                for metric_name, metric_value in value_op.iteritems():
-                    perclass_summaries.append(
-                        tf.summary.scalar(name + '_' + metric_name, metric_value))
-            self._summary_perclass = tf.summary.merge([perclass_summaries])
-
-            variables_summaries = []
+            variables = []
             for var in self._graph.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
-                variables_summaries.append(tf.summary.histogram(var.name, var))
-            self._summary_variables = tf.summary.merge([variables_summaries])
+                variables.append(tf.summary.histogram(var.name.replace(':', '_'), var))
+
+            self._summary_metrics = tf.summary.merge_all()
 
             # Saver class add ops to save and restore
             # variables to and from checkpoint
@@ -81,8 +84,8 @@ class EvaluationRunHook(tf.train.SessionRunHook):
             # the global training step
             self._gs = tf.contrib.framework.get_or_create_global_step()
 
-            self._final_ops_dict = value_dict
-            self._eval_ops = update_dict.values()
+            self._final_ops_dict = [stream_value_dict, perclass_value_dict]
+            self._eval_ops = [stream_update_dict.values(), perclass_update_dict.values()]
 
         # MonitoredTrainingSession runs hooks in background threads
         # and it doesn't wait for the thread from the last session.run()
@@ -145,11 +148,8 @@ class EvaluationRunHook(tf.train.SessionRunHook):
             with coord.stop_on_exception():
                 eval_step = 0
                 while self._eval_steps is None or eval_step < self._eval_steps:
-                    stream_metrics, error_sce, pc_metrics, variables, final_values, _ = session.run([
-                        self._summary_streaming,
-                        self._summary_error,
-                        self._summary_perclass,
-                        self._summary_variables,
+                    results, final_values, _ = session.run([
+                        self._summary_metrics,
                         self._final_ops_dict,
                         self._eval_ops
                     ])
@@ -158,12 +158,9 @@ class EvaluationRunHook(tf.train.SessionRunHook):
                     eval_step += 1
 
             # Write the summaries, save results and log
-            self._file_writer.add_summary(stream_metrics, global_step=train_step)
-            self._file_writer.add_summary(error_sce, global_step=train_step)
-            self._file_writer.add_summary(pc_metrics, global_step=train_step)
-            self._file_writer.add_summary(variables, global_step=train_step)
+            self._file_writer.add_summary(results, global_step=train_step)
             self._file_writer.flush()
-            tf.logging.info(final_values)
+            tf.logging.info('Eval complete')
 
 
 def run(target,
@@ -301,10 +298,6 @@ def run(target,
             tf.summary.scalar('training_error', train_error)
         ])
 
-        if is_chief:
-            train_file_writer = tf.summary.FileWriter(
-                os.path.join(job_dir, 'train'), graph=training_graph)
-
         # Creates a MonitoredSession for training
         # MonitoredSession is a Session-like object that handles
         # initialization, recovery and hooks
@@ -313,8 +306,8 @@ def run(target,
                                                is_chief=is_chief,
                                                checkpoint_dir=job_dir,
                                                hooks=hooks,
-                                               save_checkpoint_secs=30,
-                                               save_summaries_steps=30) as session:
+                                               save_checkpoint_secs=TRAIN_CHECKPOINT,
+                                               save_summaries_steps=TRAIN_SUMMARIES) as session:
 
             # Tuple of exceptions that should cause a clean stop of the coordinator
             coord = tf.train.Coordinator(clean_stop_exception_types=(
@@ -334,10 +327,6 @@ def run(target,
             with coord.stop_on_exception():
                 while (train_steps is None or step < train_steps) and not coord.should_stop():
                     step, _, error = session.run([global_step_tensor, train_op, error_summary])
-
-                    if is_chief:
-                        train_file_writer.add_summary(error, global_step=step)
-                        train_file_writer.flush()
 
 
 def dispatch(*args, **kwargs):
