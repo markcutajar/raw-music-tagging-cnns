@@ -1,6 +1,6 @@
 current_date=$(date +%Y%m%d_%H%M%S)
 MODEL=ds256
-JOB_NAME=ds256_w322_$current_date
+JOB_NAME=ds256_02_$current_date
 JOB_DIR=gs://magnatagatune_dataset/out_$JOB_NAME
 TRAIN_FILE=gs://magnatagatune_dataset/train_rawdata.tfrecords
 EVAL_FILE=gs://magnatagatune_dataset/valid_rawdata.tfrecords
