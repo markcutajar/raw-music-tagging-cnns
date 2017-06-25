@@ -7,34 +7,43 @@ TRAIN, EVAL, PREDICT = 'TRAIN', 'EVAL', 'PREDICT'
 def ds256(data_batch):
     
     outputs = {}
+    names =[]
     name = 'strided-conv'
+    names.append(name)
     outputs[name] = tf.layers.conv1d(data_batch, 1, 3, strides=3, activation=tf.nn.relu,
                                      kernel_regularizer=tf.layers.batch_normalization,
                                      name=name)
 
     name = 'conv-1'
+    names.append(name)
     outputs[name] = tf.layers.conv1d(outputs['strided-conv'], 2, 8, strides=1, activation=tf.nn.relu,
                                      kernel_regularizer=tf.layers.batch_normalization,
                                      name=name)
 
     name = 'maxp-1'
+    names.append(name)
     outputs[name] = tf.layers.max_pooling1d(outputs['conv-1'], pool_size=4, strides=1, name=name)
 
     name = 'conv-2'
+    names.append(name)
     outputs[name] = tf.layers.conv1d(outputs['maxp-1'], 2, 8, strides=1, activation=tf.nn.relu,
                                      kernel_regularizer=tf.layers.batch_normalization,
                                      name=name)
 
     name = 'maxp-2'
+    names.append(name)
     outputs[name] = tf.layers.max_pooling1d(outputs['conv-2'], pool_size=2, strides=1, name=name)
 
     name = 'flatten'
+    names.append(name)
     outputs[name] = tf.reshape(outputs['maxp-2'], [int(outputs['maxp-2'].shape[0]), -1])
 
     name = 'fcl-1'
+    names.append(name)
     outputs[name] = tf.layers.dense(outputs['flatten'], 100, activation=tf.nn.relu, name=name)
 
     name = 'fcl-2'
+    names.append(name)
     outputs[name] = tf.layers.dense(outputs['fcl-1'], 29, activation=tf.identity, name=name)
     return outputs[name]
 
@@ -99,9 +108,42 @@ def controller(function_name,
                     'accuracy': tf.contrib.metrics.streaming_accuracy(
                         predictions, targets_batch, name='accuracy')
                 }
-            return streaming_metrics, error
+                scalar_metrics = {
+                    'evaluation_error': error
+                }
+
+                metrics = {
+                    'stream': streaming_metrics,
+                    'scalar': scalar_metrics,
+                    'perclass': perclass_metrics(predictions, targets_batch)
+                }
+            return metrics
 
     elif mode in PREDICT:
         return predictions, prediction_values
     else:
         raise ValueError('Mode not found!')
+
+
+def perclass_metrics(predictions,
+                     targets_batch):
+
+    predictions_per_tag_list = tf.unstack(predictions, axis=1)
+    targets_per_tag_list = tf.unstack(targets_batch, axis=1)
+
+    perclass_dict={}
+    for idx, pred_tag in enumerate(predictions_per_tag_list):
+        perclass_dict[str(idx)] = {}
+        perclass_dict[str(idx)]['false_negatives'] = tf.contrib.metrics.streaming_false_negatives(
+            pred_tag, targets_per_tag_list[idx], name='false_negatives')
+
+        perclass_dict[str(idx)]['precision'] = tf.contrib.metrics.streaming_precision(
+            pred_tag, targets_per_tag_list[idx], name='precision')
+
+        perclass_dict[str(idx)]['aucroc'] = tf.contrib.metrics.streaming_auc(
+            pred_tag, targets_per_tag_list[idx], name='aucroc')
+
+        perclass_dict[str(idx)]['aucpr'] = tf.contrib.metrics.streaming_auc(
+            pred_tag, targets_per_tag_list[idx], curve='PR', name='aucpr')
+
+    return perclass_dict
