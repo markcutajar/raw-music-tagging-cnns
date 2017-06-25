@@ -4,50 +4,6 @@ import tensorflow as tf
 
 TRAIN, EVAL, PREDICT = 'TRAIN', 'EVAL', 'PREDICT'
 
-def ds256(data_batch):
-    
-    outputs = {}
-    names =[]
-    name = 'strided-conv'
-    names.append(name)
-    outputs[name] = tf.layers.conv1d(data_batch, 1, 3, strides=3, activation=tf.nn.relu,
-                                     kernel_regularizer=tf.layers.batch_normalization,
-                                     name=name)
-
-    name = 'conv-1'
-    names.append(name)
-    outputs[name] = tf.layers.conv1d(outputs['strided-conv'], 2, 8, strides=1, activation=tf.nn.relu,
-                                     kernel_regularizer=tf.layers.batch_normalization,
-                                     name=name)
-
-    name = 'maxp-1'
-    names.append(name)
-    outputs[name] = tf.layers.max_pooling1d(outputs['conv-1'], pool_size=4, strides=1, name=name)
-
-    name = 'conv-2'
-    names.append(name)
-    outputs[name] = tf.layers.conv1d(outputs['maxp-1'], 2, 8, strides=1, activation=tf.nn.relu,
-                                     kernel_regularizer=tf.layers.batch_normalization,
-                                     name=name)
-
-    name = 'maxp-2'
-    names.append(name)
-    outputs[name] = tf.layers.max_pooling1d(outputs['conv-2'], pool_size=2, strides=1, name=name)
-
-    name = 'flatten'
-    names.append(name)
-    outputs[name] = tf.reshape(outputs['maxp-2'], [int(outputs['maxp-2'].shape[0]), -1])
-
-    name = 'fcl-1'
-    names.append(name)
-    outputs[name] = tf.layers.dense(outputs['flatten'], 100, activation=tf.nn.relu, name=name)
-
-    name = 'fcl-2'
-    names.append(name)
-    outputs[name] = tf.layers.dense(outputs['fcl-1'], 50, activation=tf.identity, name=name)
-    return outputs[name]
-
-
 def controller(function_name,
                mode,
                data_batch,
@@ -146,3 +102,89 @@ def perclass_metrics(predictions,
             pred_tag, targets_per_tag_list[idx], curve='PR', name='aucpr')
 
     return perclass_dict
+
+
+def ds256_t29(data_batch):
+    outputs = {}
+    names = []
+    name = 'strided-conv'
+    names.append(name)
+    outputs[name] = tf.layers.conv1d(data_batch, 1, 3, strides=3, activation=tf.nn.relu,
+                                     kernel_regularizer=tf.layers.batch_normalization,
+                                     name=name)
+
+    name = 'conv-1'
+    names.append(name)
+    outputs[name] = tf.layers.conv1d(outputs['strided-conv'], 2, 8, strides=1, activation=tf.nn.relu,
+                                     kernel_regularizer=tf.layers.batch_normalization,
+                                     name=name)
+
+    name = 'maxp-1'
+    names.append(name)
+    outputs[name] = tf.layers.max_pooling1d(outputs['conv-1'], pool_size=4, strides=1, name=name)
+
+    name = 'conv-2'
+    names.append(name)
+    outputs[name] = tf.layers.conv1d(outputs['maxp-1'], 2, 8, strides=1, activation=tf.nn.relu,
+                                     kernel_regularizer=tf.layers.batch_normalization,
+                                     name=name)
+
+    name = 'maxp-2'
+    names.append(name)
+    outputs[name] = tf.layers.max_pooling1d(outputs['conv-2'], pool_size=2, strides=1, name=name)
+
+    name = 'flatten'
+    names.append(name)
+    outputs[name] = tf.reshape(outputs['maxp-2'], [int(outputs['maxp-2'].shape[0]), -1])
+
+    name = 'fcl-1'
+    names.append(name)
+    outputs[name] = tf.layers.dense(outputs['flatten'], 100, activation=tf.nn.relu, name=name)
+
+    name = 'fcl-2'
+    names.append(name)
+    outputs[name] = tf.layers.dense(outputs['fcl-1'], 29, activation=tf.identity, name=name)
+    return outputs[name]
+
+
+def ds256_t50(data_batch):
+    outputs = {}
+    names = []
+    name = 'strided-conv'
+    names.append(name)
+    outputs[name] = tf.layers.conv1d(data_batch, 1, 3, strides=3, activation=tf.nn.relu,
+                                     kernel_regularizer=tf.layers.batch_normalization,
+                                     name=name)
+
+    name = 'conv-1'
+    names.append(name)
+    outputs[name] = tf.layers.conv1d(outputs['strided-conv'], 2, 8, strides=1, activation=tf.nn.relu,
+                                     kernel_regularizer=tf.layers.batch_normalization,
+                                     name=name)
+
+    name = 'maxp-1'
+    names.append(name)
+    outputs[name] = tf.layers.max_pooling1d(outputs['conv-1'], pool_size=4, strides=1, name=name)
+
+    name = 'conv-2'
+    names.append(name)
+    outputs[name] = tf.layers.conv1d(outputs['maxp-1'], 2, 8, strides=1, activation=tf.nn.relu,
+                                     kernel_regularizer=tf.layers.batch_normalization,
+                                     name=name)
+
+    name = 'maxp-2'
+    names.append(name)
+    outputs[name] = tf.layers.max_pooling1d(outputs['conv-2'], pool_size=2, strides=1, name=name)
+
+    name = 'flatten'
+    names.append(name)
+    outputs[name] = tf.reshape(outputs['maxp-2'], [int(outputs['maxp-2'].shape[0]), -1])
+
+    name = 'fcl-1'
+    names.append(name)
+    outputs[name] = tf.layers.dense(outputs['flatten'], 100, activation=tf.nn.relu, name=name)
+
+    name = 'fcl-2'
+    names.append(name)
+    outputs[name] = tf.layers.dense(outputs['fcl-1'], 50, activation=tf.identity, name=name)
+    return outputs[name]
