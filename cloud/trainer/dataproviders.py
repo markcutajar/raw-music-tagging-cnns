@@ -54,6 +54,7 @@ class DataProvider(object):
         self._num_samples = num_samples
         self._data_shape = data_shape
         self._shuffle = shuffle
+        self._selective_tags = None
 
         with file_io.FileIO(metadata_file, 'r') as f:
             metadata = json.load(f)
