@@ -20,8 +20,8 @@ from .dataproviders import DataProvider
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.logging.set_verbosity(tf.logging.INFO)
 
-TRAIN_CHECKPOINT = 10
-TRAIN_SUMMARIES = 10
+TRAIN_CHECKPOINT = 30
+TRAIN_SUMMARIES = 60
 CHECKPOINT_PER_EVAL = 5
 
 class EvaluationRunHook(tf.train.SessionRunHook):
@@ -86,6 +86,8 @@ class EvaluationRunHook(tf.train.SessionRunHook):
 
             self._final_ops_dict = [stream_value_dict, perclass_value_dict]
             self._eval_ops = [stream_update_dict.values(), perclass_update_dict.values()]
+            # self._final_ops_dict = stream_value_dict
+            # self._eval_ops = stream_update_dict.values()
 
         # MonitoredTrainingSession runs hooks in background threads
         # and it doesn't wait for the thread from the last session.run()
