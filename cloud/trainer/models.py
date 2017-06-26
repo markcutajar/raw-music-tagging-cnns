@@ -123,13 +123,13 @@ def ds256ra(data_batch):
     name = 'strided-conv'
     names.append(name)
     outputs[name] = tf.layers.conv1d(data_batch, FD, FL, strides=SL, activation=tf.nn.elu,
-                                     kernel_regularizer=tf.layers.batch_normalization,
+                                     activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
 
     name = 'conv-1'
     names.append(name)
     outputs[name] = tf.layers.conv1d(outputs['strided-conv'], 32, 8, strides=1, activation=tf.nn.elu,
-                                     kernel_regularizer=tf.layers.batch_normalization,
+                                     activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
 
     name = 'maxp-1'
@@ -139,7 +139,7 @@ def ds256ra(data_batch):
     name = 'conv-2'
     names.append(name)
     outputs[name] = tf.layers.conv1d(outputs['maxp-1'], 32, 8, strides=1, activation=tf.nn.elu,
-                                     kernel_regularizer=tf.layers.batch_normalization,
+                                     activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
 
     name = 'maxp-2'
@@ -169,13 +169,13 @@ def ds256rb(data_batch):
     name = 'strided-conv'
     names.append(name)
     outputs[name] = tf.layers.conv1d(data_batch, FD, FL, strides=SL, activation=tf.nn.elu,
-                                     kernel_regularizer=tf.layers.batch_normalization,
+                                     activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
 
     name = 'conv-1'
     names.append(name)
     outputs[name] = tf.layers.conv1d(outputs['strided-conv'], 32, 8, strides=1, activation=tf.nn.elu,
-                                     kernel_regularizer=tf.layers.batch_normalization,
+                                     activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
 
     name = 'maxp-1'
@@ -185,12 +185,50 @@ def ds256rb(data_batch):
     name = 'conv-2'
     names.append(name)
     outputs[name] = tf.layers.conv1d(outputs['maxp-1'], 32, 8, strides=1, activation=tf.nn.elu,
-                                     kernel_regularizer=tf.layers.batch_normalization,
+                                     activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
 
     name = 'maxp-2'
     names.append(name)
     outputs[name] = tf.layers.max_pooling1d(outputs['conv-2'], pool_size=4, strides=4, name=name)
+
+    name = 'flatten'
+    names.append(name)
+    outputs[name] = tf.reshape(outputs['maxp-2'], [int(outputs['maxp-2'].shape[0]), -1])
+
+    name = 'fcl-1'
+    names.append(name)
+    outputs[name] = tf.layers.dense(outputs['flatten'], 100, activation=tf.nn.elu, name=name)
+
+    name = 'fcl-2'
+    names.append(name)
+    outputs[name] = tf.layers.dense(outputs['fcl-1'], OZ, activation=tf.identity, name=name)
+    return outputs[name]
+
+def ds256fa(data_batch):
+    OZ = 50
+    outputs = {}
+    names = []
+
+    name = 'conv-1'
+    names.append(name)
+    outputs[name] = tf.layers.conv2d(outputs['strided-conv'], 32, (8,1), strides=(1,1), activation=tf.nn.elu,
+                                     activity_regularizer=tf.layers.batch_normalization,
+                                     name=name)
+
+    name = 'maxp-1'
+    names.append(name)
+    outputs[name] = tf.layers.max_pooling2d(outputs['conv-1'], pool_size=(1,4), strides=(1,4), name=name)
+
+    name = 'conv-2'
+    names.append(name)
+    outputs[name] = tf.layers.conv2d(outputs['maxp-1'], 32, (8,1), strides=(1,1), activation=tf.nn.elu,
+                                     activity_regularizer=tf.layers.batch_normalization,
+                                     name=name)
+
+    name = 'maxp-2'
+    names.append(name)
+    outputs[name] = tf.layers.max_pooling2d(outputs['conv-2'], pool_size=(1,4), strides=(1,4), name=name)
 
     name = 'flatten'
     names.append(name)
