@@ -445,7 +445,7 @@ if __name__ == "__main__":
                         
     parser.add_argument('--num-song-samples',
                         type=int,
-                        default=465984,
+                        default=-1,
                         help="""\
                         Samples of the songs to be used in the training,
                         evaluation and prediction process.
