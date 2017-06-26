@@ -84,10 +84,11 @@ def controller(function_name,
 def perclass_metrics(predictions,
                      targets_batch):
 
+    perclass_dict = {}
     predictions_per_tag_list = tf.unstack(predictions, axis=1)
     targets_per_tag_list = tf.unstack(targets_batch, axis=1)
 
-    perclass_dict={}
+    
     for idx, pred_tag in enumerate(predictions_per_tag_list):
         perclass_dict[str(idx)+'_false_negatives'] = tf.contrib.metrics.streaming_false_negatives(
             pred_tag, targets_per_tag_list[idx], name='false_negatives')
@@ -107,12 +108,12 @@ def perclass_metrics(predictions,
     return perclass_dict
 
 
-def ds256_t29(data_batch):
+def ds256a_t29(data_batch):
     outputs = {}
     names = []
     name = 'strided-conv'
     names.append(name)
-    outputs[name] = tf.layers.conv1d(data_batch, 1, 3, strides=3, activation=tf.nn.relu,
+    outputs[name] = tf.layers.conv1d(data_batch, 1, 256, strides=256, activation=tf.nn.relu,
                                      kernel_regularizer=tf.layers.batch_normalization,
                                      name=name)
 
@@ -150,12 +151,12 @@ def ds256_t29(data_batch):
     return outputs[name]
 
 
-def ds256_t50(data_batch):
+def ds256a_t50(data_batch):
     outputs = {}
     names = []
     name = 'strided-conv'
     names.append(name)
-    outputs[name] = tf.layers.conv1d(data_batch, 1, 3, strides=3, activation=tf.nn.relu,
+    outputs[name] = tf.layers.conv1d(data_batch, 1, 256, strides=256, activation=tf.nn.relu,
                                      kernel_regularizer=tf.layers.batch_normalization,
                                      name=name)
 
