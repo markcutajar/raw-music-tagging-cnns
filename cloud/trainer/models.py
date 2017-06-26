@@ -122,15 +122,18 @@ def ds256ra(data_batch):
     names = []
     name = 'strided-conv'
     names.append(name)
-    outputs[name] = tf.layers.conv1d(data_batch, FD, FL, strides=SL, activation=tf.nn.elu,
-                                     activity_regularizer=tf.layers.batch_normalization,
-                                     name=name)
+    output = tf.layers.conv1d(data_batch, FD, FL, strides=SL, activation=None,
+                              activity_regularizer=tf.layers.batch_normalization,
+                              name=name)
+    outputs[name] = tf.nn.elu(output)
+
 
     name = 'conv-1'
     names.append(name)
-    outputs[name] = tf.layers.conv1d(outputs['strided-conv'], 32, 8, strides=1, activation=tf.nn.elu,
+    output = tf.layers.conv1d(outputs['strided-conv'], 32, 8, strides=1, activation=None,
                                      activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
+    outputs[name] = tf.nn.elu(output)
 
     name = 'maxp-1'
     names.append(name)
@@ -138,9 +141,10 @@ def ds256ra(data_batch):
 
     name = 'conv-2'
     names.append(name)
-    outputs[name] = tf.layers.conv1d(outputs['maxp-1'], 32, 8, strides=1, activation=tf.nn.elu,
+    output = tf.layers.conv1d(outputs['maxp-1'], 32, 8, strides=1, activation=None,
                                      activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
+    outputs[name] = tf.nn.elu(output)
 
     name = 'maxp-2'
     names.append(name)
@@ -168,15 +172,17 @@ def ds256rb(data_batch):
     names = []
     name = 'strided-conv'
     names.append(name)
-    outputs[name] = tf.layers.conv1d(data_batch, FD, FL, strides=SL, activation=tf.nn.elu,
+    output = tf.layers.conv1d(data_batch, FD, FL, strides=SL, activation=None,
                                      activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
+    outputs[name] = tf.nn.elu(output)
 
     name = 'conv-1'
     names.append(name)
-    outputs[name] = tf.layers.conv1d(outputs['strided-conv'], 32, 8, strides=1, activation=tf.nn.elu,
+    output = tf.layers.conv1d(outputs['strided-conv'], 32, 8, strides=1, activation=None,
                                      activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
+    outputs[name] = tf.nn.elu(output)
 
     name = 'maxp-1'
     names.append(name)
@@ -184,9 +190,10 @@ def ds256rb(data_batch):
 
     name = 'conv-2'
     names.append(name)
-    outputs[name] = tf.layers.conv1d(outputs['maxp-1'], 32, 8, strides=1, activation=tf.nn.elu,
+    output = tf.layers.conv1d(outputs['maxp-1'], 32, 8, strides=1, activation=None,
                                      activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
+    outputs[name] = tf.nn.elu(output)
 
     name = 'maxp-2'
     names.append(name)
@@ -212,9 +219,10 @@ def ds256fa(data_batch):
 
     name = 'conv-1'
     names.append(name)
-    outputs[name] = tf.layers.conv2d(outputs['strided-conv'], 32, (8,1), strides=(1,1), activation=tf.nn.elu,
+    output = tf.layers.conv2d(outputs['strided-conv'], 32, (8,1), strides=(1,1), activation=None,
                                      activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
+    outputs[name] = tf.nn.elu(output)
 
     name = 'maxp-1'
     names.append(name)
@@ -222,9 +230,10 @@ def ds256fa(data_batch):
 
     name = 'conv-2'
     names.append(name)
-    outputs[name] = tf.layers.conv2d(outputs['maxp-1'], 32, (8,1), strides=(1,1), activation=tf.nn.elu,
+    output = tf.layers.conv2d(outputs['maxp-1'], 32, (8,1), strides=(1,1), activation=None,
                                      activity_regularizer=tf.layers.batch_normalization,
                                      name=name)
+    outputs[name] = tf.nn.elu(output)
 
     name = 'maxp-2'
     names.append(name)
