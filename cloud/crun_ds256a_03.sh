@@ -1,6 +1,6 @@
-current_date=$(date +%Y%m%d_%H%M%S)
-MODEL=ds256_t50
-JOB_NAME=ds256_02_$current_date
+current_date=$(date +%m%d_%H%M%S)
+MODEL=ds256a_t29
+JOB_NAME=ds256a_01_$current_date
 JOB_DIR=gs://magnatagatune_dataset/out_$JOB_NAME
 TRAIN_FILE=gs://magnatagatune_dataset/train_rawdata.tfrecords
 EVAL_FILE=gs://magnatagatune_dataset/valid_rawdata.tfrecords
@@ -8,7 +8,7 @@ METADATA_FILE=gs://magnatagatune_dataset/raw_metadata.json
 TRAIN_STEPS=22000
 REGION=us-east1
 CONFIG=config.yaml
-WINDOW_SIZE=51776
+SELECTIVE_TAGS=gs://magnatagatune_dataset/selective_tags.json
 
 gcloud ml-engine jobs submit training $JOB_NAME \
 --stream-logs \
@@ -22,6 +22,6 @@ gcloud ml-engine jobs submit training $JOB_NAME \
 --train-files $TRAIN_FILE \
 --eval-files $EVAL_FILE \
 --train-steps $TRAIN_STEPS \
---metadata-files $METDATA_FILE \
+--metadata-files $METADATA_FILE \
 --model-function $MODEL \
---window-size $WINDOW_SIZE
+--selective-tags $SELECTIVE_TAGS

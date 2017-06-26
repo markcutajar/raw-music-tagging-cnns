@@ -1,12 +1,11 @@
-current_date=$(date +%Y%m%d_%H%M%S)
-MODEL=ds256_t50
-JOB_DIR=out_ds256_02_$current_date
+current_date=$(date +%m%d_%H%M%S)
+MODEL=ds256a_t29
+JOB_DIR=out_ds256a_01_$current_date
 TRAIN_FILE=../magnatagatune/train_rawdata.tfrecords
 EVAL_FILE=../magnatagatune/valid_rawdata.tfrecords
 METADATA_FILE=../magnatagatune/raw_metadata.json
 TRAIN_STEPS=22000
-SELTAGS=../magnatagatune/selective_tags.json
-WINDOW_SIZE=51776
+SELECTIVE_TAGS=../magnatagatune/selective_tags.json
 
 gcloud ml-engine local train --package-path trainer \
 --module-name trainer.task \
@@ -17,4 +16,4 @@ gcloud ml-engine local train --package-path trainer \
 --metadata-files $METADATA_FILE \
 --train-steps $TRAIN_STEPS \
 --model-function $MODEL \
---window-size $WINDOW_SIZE
+--selective-tags $SELECTIVE_TAGS
