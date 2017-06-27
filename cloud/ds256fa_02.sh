@@ -10,6 +10,7 @@ METADATA_FILE=gs://magnatagatune_dataset/fbank40_metadata.json
 TRAIN_STEPS=22000
 REGION=us-east1
 CONFIG=config.yaml
+WINDOW_SIZE=323
 
 gcloud ml-engine jobs submit training $JOB_NAME \
 --stream-logs \
@@ -24,4 +25,5 @@ gcloud ml-engine jobs submit training $JOB_NAME \
 --eval-files $EVAL_FILE \
 --train-steps $TRAIN_STEPS \
 --metadata-files $METADATA_FILE \
---model-function $MODEL
+--model-function $MODEL \
+--window-size $WINDOW_SIZE
