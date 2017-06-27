@@ -20,9 +20,9 @@ from .dataproviders import DataProvider
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.logging.set_verbosity(tf.logging.INFO)
 
-TRAIN_CHECKPOINT = 20
+TRAIN_CHECKPOINT = 30
 TRAIN_SUMMARIES = 60
-CHECKPOINT_PER_EVAL = 5
+CHECKPOINT_PER_EVAL = 10
 
 class EvaluationRunHook(tf.train.SessionRunHook):
     """EvaluationRunHook performs continuous evaluation of the model.
@@ -227,6 +227,7 @@ def run(target,
 
     if is_chief:
         # Construct evaluation graph
+        tf.logging.info('Learning Rate: {}'.format(learning_rate))
         evaluation_graph = tf.Graph()
         with evaluation_graph.as_default():
 
@@ -403,7 +404,7 @@ if __name__ == "__main__":
     
     parser.add_argument('--eval-steps',
                         help='Number of steps to run evaluation for at each checkpoint',
-                        default=258,
+                        default=129,
                         type=int)
     
     parser.add_argument('--train-batch-size',
@@ -418,8 +419,8 @@ if __name__ == "__main__":
 
     parser.add_argument('--learning-rate',
                         type=float,
-                        default=0.001,
-                        help='Learning rate for SGD')
+                        default=0.01,
+                        help='Learning rate for Optimizer')
   
     parser.add_argument('--eval-frequency',
                         default=1,
