@@ -20,7 +20,7 @@ from .dataproviders import DataProvider
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.logging.set_verbosity(tf.logging.INFO)
 
-TRAIN_CHECKPOINT = 30
+TRAIN_CHECKPOINT = 20
 TRAIN_SUMMARIES = 60
 CHECKPOINT_PER_EVAL = 5
 
