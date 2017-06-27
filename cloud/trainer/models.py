@@ -44,11 +44,11 @@ def controller(function_name,
         name = 'error'
         with tf.name_scope(name):
             error = tf.losses.sigmoid_cross_entropy(
-                multi_class_labels=targets_batch, logits=logits)
+                multi_class_labels=targets_batch, logits=logits, weights=tf.constant(2))
 
         if mode in TRAIN:
             with tf.name_scope('train'):
-                train_step = tf.train.AdamOptimizer(learning_rate).minimize(error, global_step=global_step)
+                train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(error, global_step=global_step)
             return train_step, global_step, error
 
         else:
