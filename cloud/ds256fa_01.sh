@@ -7,7 +7,7 @@ JOB_DIR=gs://magnatagatune_dataset/out_$JOB_NAME
 TRAIN_FILE=gs://magnatagatune_dataset/train_fbanksdata.tfrecords
 EVAL_FILE=gs://magnatagatune_dataset/valid_fbanksdata.tfrecords
 METADATA_FILE=gs://magnatagatune_dataset/fbank40_metadata.json
-TRAIN_STEPS=22000
+TRAIN_STEPS=18102
 REGION=us-east1
 CONFIG=config.yaml
 
