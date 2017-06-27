@@ -66,8 +66,8 @@ def controller(function_name,
                         predictions, targets_batch, name='precision'),
                     'aucroc': tf.contrib.metrics.streaming_auc(
                         predictions, targets_batch, name='aucroc'),
-                    'aucpr': tf.contrib.metrics.streaming_auc(
-                        predictions, targets_batch, curve='PR', name='aucpr')
+                    #'aucpr': tf.contrib.metrics.streaming_auc(
+                    #    predictions, targets_batch, curve='PR', name='aucpr')
                 }
                 scalar_metrics = {
                     'evaluation_error': error
