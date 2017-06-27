@@ -8,6 +8,7 @@ TRAIN_FILE=gs://magnatagatune_dataset/train_rawdata.tfrecords
 EVAL_FILE=gs://magnatagatune_dataset/valid_rawdata.tfrecords
 METADATA_FILE=gs://magnatagatune_dataset/raw_metadata.json
 TRAIN_STEPS=18102
+LEARNING_RATE=0.1
 REGION=us-east1
 CONFIG=config.yaml
 
@@ -24,4 +25,5 @@ gcloud ml-engine jobs submit training $JOB_NAME \
 --eval-files $EVAL_FILE \
 --train-steps $TRAIN_STEPS \
 --metadata-files $METADATA_FILE \
+--learning-rate $LEARNING_RATE \
 --model-function $MODEL

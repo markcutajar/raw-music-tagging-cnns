@@ -4,7 +4,8 @@ JOB_DIR=out_ds256ra_01_$current_date
 TRAIN_FILE=../magnatagatune/train_rawdata.tfrecords
 EVAL_FILE=../magnatagatune/valid_rawdata.tfrecords
 METADATA_FILE=../magnatagatune/raw_metadata.json
-TRAIN_STEPS=22000
+TRAIN_STEPS=18102
+LEARNING_RATE=0.1
 
 gcloud ml-engine local train --package-path trainer \
 --module-name trainer.task \
@@ -14,4 +15,5 @@ gcloud ml-engine local train --package-path trainer \
 --job-dir $JOB_DIR \
 --metadata-files $METADATA_FILE \
 --train-steps $TRAIN_STEPS \
+--learning-rate $LEARNING_RATE \
 --model-function $MODEL
