@@ -403,7 +403,7 @@ if __name__ == "__main__":
     
     parser.add_argument('--eval-steps',
                         help='Number of steps to run evaluation for at each checkpoint',
-                        default=129,
+                        default=258,
                         type=int)
     
     parser.add_argument('--train-batch-size',
@@ -418,7 +418,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--learning-rate',
                         type=float,
-                        default=0.003,
+                        default=0.001,
                         help='Learning rate for SGD')
   
     parser.add_argument('--eval-frequency',
