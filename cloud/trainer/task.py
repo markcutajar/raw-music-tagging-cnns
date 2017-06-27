@@ -155,7 +155,7 @@ class EvaluationRunHook(tf.train.SessionRunHook):
                         self._final_ops_dict,
                         self._eval_ops
                     ])
-                    if eval_step % 100 == 0 or eval_step % 0 == 0:
+                    if eval_step % 100 == 0:
                         tf.logging.info("On Evaluation Step: {}".format(eval_step))
                     eval_step += 1
 
