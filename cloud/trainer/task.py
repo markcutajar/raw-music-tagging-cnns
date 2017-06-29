@@ -3,8 +3,8 @@
     It is designed to make use of Google's distributed cloud machine learning
     engine.
     
-    Please note that some of the code is courtosy of the Google Tensorflow,
-    Authurs, and the census samples project found at:
+    Please note that some of the code is courtesy of the Google TensorFlow,
+    Authors, and the census samples project found at:
 
     https://github.com/GoogleCloudPlatform/cloudml-samples/tree/master/census
 """
@@ -20,9 +20,14 @@ from .dataproviders import DataProvider
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.logging.set_verbosity(tf.logging.INFO)
 
-TRAIN_CHECKPOINT = 30
+TRAIN_CHECKPOINT = 60
 TRAIN_SUMMARIES = 60
-CHECKPOINT_PER_EVAL = 10
+CHECKPOINT_PER_EVAL = 3
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Hook to run by the Monitored Session
+# ---------------------------------------------------------------------------------------------------------------------
+
 
 class EvaluationRunHook(tf.train.SessionRunHook):
     """EvaluationRunHook performs continuous evaluation of the model.
@@ -133,8 +138,8 @@ class EvaluationRunHook(tf.train.SessionRunHook):
         """Run model evaluation and generate summaries."""
         coord = tf.train.Coordinator(clean_stop_exception_types=(
             tf.errors.CancelledError, tf.errors.OutOfRangeError))
-
-        with tf.Session(graph=self._graph) as session:
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
+        with tf.Session(graph=self._graph, config=tf.ConfigProto(gpu_options=gpu_options)) as session:
             # Restores previously saved variables from latest checkpoint
             self._saver.restore(session, self._latest_checkpoint)
 
@@ -146,6 +151,9 @@ class EvaluationRunHook(tf.train.SessionRunHook):
             tf.train.start_queue_runners(coord=coord, sess=session)
             train_step = session.run(self._gs)
 
+            run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+            run_metadata = tf.RunMetadata()
+
             tf.logging.info('Starting Evaluation For Step: {}'.format(train_step))
             with coord.stop_on_exception():
                 eval_step = 0
@@ -154,18 +162,27 @@ class EvaluationRunHook(tf.train.SessionRunHook):
                         self._summary_metrics,
                         self._final_ops_dict,
                         self._eval_ops
-                    ])
+                    ], options=run_options, run_metadata=run_metadata)
+
                     if eval_step % 100 == 0:
                         tf.logging.info("On Evaluation Step: {}".format(eval_step))
                     eval_step += 1
 
             # Write the summaries, save results and log
             self._file_writer.add_summary(results, global_step=train_step)
+            self._file_writer.add_run_metadata(run_metadata, 'run_metadata_{}'.format(train_step),
+                                               global_step=train_step)
             self._file_writer.flush()
-            tf.logging.info('Eval complete')
+            tf.logging.info('Eval complete. Step: {}'.format(eval_step))
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Run method for each worker/master node
+# ---------------------------------------------------------------------------------------------------------------------
 
 
 def run(target,
+        cluster,
         is_chief,
         job_dir,
         train_files,
@@ -191,6 +208,7 @@ def run(target,
     Args:
         target (string): TensorFlow server target
         is_chief (bool): Boolean flag to specify a chief server
+        cluster: Cluster_spec of the custer being run for replica_device_setter
         train_files (string): File for training
         eval_files (string): File for evaluation
         metadata_files (string): File containing dataset metadata
@@ -227,10 +245,10 @@ def run(target,
 
     if is_chief:
         # Construct evaluation graph
-        tf.logging.info('Learning Rate: {}'.format(learning_rate))
+        # tf.logging.info('Learning Rate: {}'.format(learning_rate))
         evaluation_graph = tf.Graph()
         with evaluation_graph.as_default():
-
+            # Evaluation data provider
             eval_data = DataProvider(
                 [eval_files],
                 metadata_files,
@@ -242,11 +260,11 @@ def run(target,
                 window_size=window_size,
                 data_shape=data_shape
             )
-            
+
             # Features and label tensors
-            features, labels = eval_data.raw_input_fn()
-            
-            # Metric dictionary of evaluation
+            features, labels = eval_data.batch_in()
+
+            # Model for evaluation
             metrics = models.controller(
                 model_function,
                 models.EVAL,
@@ -256,6 +274,7 @@ def run(target,
                 window=bool(window_size)
             )
 
+        # Hok for monitored training session
         hooks = [EvaluationRunHook(
             job_dir,
             metrics,
@@ -271,7 +290,8 @@ def run(target,
     training_graph = tf.Graph()
     with training_graph.as_default():
     
-        with tf.device(tf.train.replica_device_setter()):
+        with tf.device(tf.train.replica_device_setter(cluster=cluster)):
+            # Training data provicer
             train_data = DataProvider(
                 [train_files],
                 metadata_files,
@@ -285,9 +305,9 @@ def run(target,
             )
             
             # Features and label tensors
-            features, labels = train_data.raw_input_fn()
-            
-            # Metric 
+            features, labels = train_data.batch_in()
+
+            # Model for training
             [train_op, global_step_tensor, train_error] = models.controller(
                 model_function,
                 models.TRAIN,
@@ -297,9 +317,18 @@ def run(target,
                 window=bool(window_size)
             )
 
+        # Summary for training error
         error_summary = tf.summary.merge([
             tf.summary.scalar('training_error', train_error)
         ])
+
+        # GPU option to limit usage of GPU memory per process.
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
+
+        # File writer for metadata of master:replica
+        if is_chief:
+            meta_writer = tf.summary.FileWriter(os.path.join(job_dir, 'train'), graph=training_graph)
+
 
         # Creates a MonitoredSession for training
         # MonitoredSession is a Session-like object that handles
@@ -310,7 +339,9 @@ def run(target,
                                                checkpoint_dir=job_dir,
                                                hooks=hooks,
                                                save_checkpoint_secs=TRAIN_CHECKPOINT,
-                                               save_summaries_steps=TRAIN_SUMMARIES) as session:
+                                               save_summaries_steps=TRAIN_SUMMARIES,
+                                               config=tf.ConfigProto(gpu_options=gpu_options)) as session:
+            #Command for logging variable and ops device placement: log_device_placement = True
 
             # Tuple of exceptions that should cause a clean stop of the coordinator
             coord = tf.train.Coordinator(clean_stop_exception_types=(
@@ -324,12 +355,27 @@ def run(target,
             # distributed setting
             step = global_step_tensor.eval(session=session)
 
+            # Set up run options and metadata
+            run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+            run_metadata = tf.RunMetadata()
+
             # Run the training graph which returns the step number as tracked by
             # the global step tensor.
             # When train epochs is reached, coord.should_stop() will be true.
             with coord.stop_on_exception():
                 while (train_steps is None or step < train_steps) and not coord.should_stop():
-                    step, _, error = session.run([global_step_tensor, train_op, error_summary])
+                    step, _, error = session.run([global_step_tensor, train_op, error_summary],
+                                                 options=run_options, run_metadata=run_metadata)
+                    if is_chief:
+                        if step == 10 or step % 2000 == 0:
+                            meta_writer.add_run_metadata(run_metadata,
+                                                         'run_metadata_{}'.format(step),
+                                                         global_step=step)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Cluster Creator
+# ---------------------------------------------------------------------------------------------------------------------
 
 
 def dispatch(*args, **kwargs):
@@ -340,7 +386,7 @@ def dispatch(*args, **kwargs):
 
     # If TF_CONFIG is not available run local
     if not tf_config:
-        return run('', True, *args, **kwargs)
+        return run('', None, True, *args, **kwargs)
 
     tf_config_json = json.loads(tf_config)
 
@@ -350,7 +396,7 @@ def dispatch(*args, **kwargs):
 
     # If cluster information is empty run local
     if job_name is None or task_index is None:
-        return run('', True, *args, **kwargs)
+        return run('', None, True, *args, **kwargs)
 
     cluster_spec = tf.train.ClusterSpec(cluster)
     server = tf.train.Server(cluster_spec,
@@ -364,7 +410,12 @@ def dispatch(*args, **kwargs):
         server.join()
         return
     elif job_name in ['master', 'worker']:
-        return run(server.target, job_name == 'master', *args, **kwargs)
+        return run(server.target, cluster_spec, job_name == 'master', *args, **kwargs)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Input Parsing
+# ---------------------------------------------------------------------------------------------------------------------
 
 
 if __name__ == "__main__":
@@ -404,7 +455,7 @@ if __name__ == "__main__":
     
     parser.add_argument('--eval-steps',
                         help='Number of steps to run evaluation for at each checkpoint',
-                        default=129,
+                        default=106,
                         type=int)
     
     parser.add_argument('--train-batch-size',
@@ -419,7 +470,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--learning-rate',
                         type=float,
-                        default=0.01,
+                        default=0.001,
                         help='Learning rate for Optimizer')
   
     parser.add_argument('--eval-frequency',
