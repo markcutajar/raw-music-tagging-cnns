@@ -21,20 +21,18 @@ def controller(function_name,
 
     # Get logits depending if windowed inputs or not
     if window:
-        with tf.name_scope('windowed_model'):
-            logits_array = tf.map_fn(lambda w: model(w),
-                                     elems=data_batch,
-                                     back_prop=True,
-                                     name='MapModels')
+        logits_array = tf.map_fn(lambda w: model(w, mode),
+                                 elems=data_batch,
+                                 back_prop=True,
+                                 name='MapModels')
 
-            logits = tf.concat(logits_array, axis=0, name='windowLogits')
-            logits = tf.reduce_mean(logits, axis=0, name='averageLogits')
+        logits = tf.concat(logits_array, axis=0, name='windowLogits')
+        logits = tf.reduce_mean(logits, axis=0, name='averageLogits')
     else:
-            # Get logits with one call
-            logits = model(data_batch)
+        logits = model(data_batch, mode)
 
     # Get tag predictions
-    with tf.name_scope('preds'):
+    with tf.name_scope('predictions'):
         prediction_values = tf.nn.sigmoid(logits, name='probs')
         predictions = tf.round(prediction_values)
 
@@ -44,11 +42,13 @@ def controller(function_name,
         name = 'error'
         with tf.name_scope(name):
             error = tf.losses.sigmoid_cross_entropy(
-                multi_class_labels=targets_batch, logits=logits, weights=tf.constant(2))
+                multi_class_labels=targets_batch, logits=logits, weights=tf.constant(3))
+            # error = weighted_sigmoid_cross_entropy(logits=logits, labels=targets_batch, false_negatives_weight=30)
+            # tf.losses.add_loss(error)
 
         if mode in TRAIN:
             with tf.name_scope('train'):
-                train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(error, global_step=global_step)
+                train_step = tf.train.AdamOptimizer(learning_rate).minimize(error, global_step=global_step)
             return train_step, global_step, error
 
         else:
@@ -111,16 +111,132 @@ def perclass_metrics(predictions, targets_batch):
         perclass_dict[str(idx)+'_aucroc'] = tf.contrib.metrics.streaming_auc(
             pred_tag, targets_per_tag_list[idx], name='aucroc')
 
-        perclass_dict[str(idx)+'_aucpr'] = tf.contrib.metrics.streaming_auc(
-            pred_tag, targets_per_tag_list[idx], curve='PR', name='aucpr')
+        #perclass_dict[str(idx)+'_aucpr'] = tf.contrib.metrics.streaming_auc(
+        #    pred_tag, targets_per_tag_list[idx], curve='PR', name='aucpr')
 
     return perclass_dict
+
+def weighted_sigmoid_cross_entropy(logits, labels, false_negatives_weight):
+
+    fnw = tf.constant(false_negatives_weight, dtype=tf.float32)
+    weighting = tf.maximum(1.0, tf.multiply(fnw, labels))
+    false_p_coefficient = tf.multiply(tf.maximum(logits, tf.constant(0.0)), weighting)
+    false_n_coefficient = tf.multiply(weighting, tf.multiply(logits, labels))
+    log_exp = tf.log(tf.add(tf.constant(1.0),
+                            tf.exp(tf.multiply(tf.constant(-1.0), tf.abs(logits)))))
+    error_matrix = tf.add(tf.subtract(false_p_coefficient, false_n_coefficient), log_exp)
+    error = tf.reduce_mean(error_matrix)
+    return error
 
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------------------------------------------------
 
+# Model proposed by Dieleman et al. using Raw data
+# First Conv: FL256, FS256, FD1
+# Output: 50 Neurons
+# Structure: 3 Conv, 2 MLP
+def ds256ra(data_batch, mode):
+    filt_length = 256
+    filt_depth = 1
+    stride_length = 256
+    output_size = 50
+    outputs = {}
+
+    name = 'CL1'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(data_batch,
+                                  filt_depth,
+                                  filt_length,
+                                  strides=stride_length,
+                                  activation=None,
+                                  name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'CL2'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(outputs['CL1'], 32, 8, strides=1, activation=None, name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'MP1'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=4, strides=4, name=name)
+
+    name = 'CL3'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(outputs['MP1'], 32, 8, strides=1, activation=None, name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'MP2'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=4, strides=4, name=name)
+
+    name = 'FLTN'
+    outputs[name] = tf.reshape(outputs['MP2'], [int(outputs['MP2'].shape[0]), -1], name=name)
+
+    name = 'FCL1'
+    outputs[name] = tf.layers.dense(outputs['FLTN'], 1000, activation=tf.nn.elu, name=name)
+
+    name = 'FCL2'
+    outputs[name] = tf.layers.dense(outputs['FCL1'], output_size, activation=tf.identity, name=name)
+    return outputs[name]
+
+
+# Model proposed by Dieleman et al. using Raw data
+# First Conv: FL256, FS16, FD6
+# Output: 50 Neurons
+# Structure: 3 Conv, 2 MLP
+def ds256rb(data_batch, mode):
+    filt_length = 256
+    filt_depth = 6
+    stride_length = 16
+    output_size = 50
+    outputs = {}
+
+    name = 'CL1'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(data_batch,
+                                  filt_depth,
+                                  filt_length,
+                                  strides=stride_length,
+                                  activation=None,
+                                  name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode == TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'CL2'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(outputs['CL1'], 32, 8, strides=1, activation=None, name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode == TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'MP1'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=4, strides=4, name=name)
+
+    name = 'CL3'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(outputs['MP1'], 32, 8, strides=1, activation=None, name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode == TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'MP2'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=4, strides=4, name=name)
+
+    name = 'FLTN'
+    outputs[name] = tf.reshape(outputs['MP2'], [int(outputs['MP2'].shape[0]), -1], name=name)
+
+    name = 'FCL1'
+    outputs[name] = tf.layers.dense(outputs['FLTN'], 1000, activation=tf.nn.elu, name=name)
+
+    name = 'FCL2'
+    outputs[name] = tf.layers.dense(outputs['FCL1'], output_size, activation=tf.identity, name=name)
+    return outputs[name]
+
+# ---------------------------------------------------------------------------------------------------------------------
+# In Development
+# ---------------------------------------------------------------------------------------------------------------------
 
 def ds256fa(data_batch):
     OZ = 50
@@ -136,7 +252,7 @@ def ds256fa(data_batch):
 
     name = 'maxp-1'
     names.append(name)
-    outputs[name] = tf.layers.max_pooling2d(outputs['conv-1'], pool_size=(1, 4), strides=(1, 4), name=name)
+    outputs[name] = tf.layers.max_pooling2d(outputs['conv-1'], pool_size=(4, 1), strides=(4, 1), name=name)
 
     name = 'conv-2'
     names.append(name)
@@ -147,7 +263,7 @@ def ds256fa(data_batch):
 
     name = 'maxp-2'
     names.append(name)
-    outputs[name] = tf.layers.max_pooling2d(outputs['conv-2'], pool_size=(1, 4), strides=(1, 4), name=name)
+    outputs[name] = tf.layers.max_pooling2d(outputs['conv-2'], pool_size=(4, 1), strides=(4, 1), name=name)
 
     name = 'flatten'
     names.append(name)
@@ -163,11 +279,11 @@ def ds256fa(data_batch):
     return outputs[name]
 
 
-def ds256ra(data_batch):
+def ds256ra_t3(data_batch):
     FL = 256
     FD = 1
     SL = 256
-    OZ = 50
+    OZ = 3
     outputs = {}
     names = []
     name = 'strided-conv'
@@ -218,51 +334,7 @@ def ds256ra(data_batch):
     return outputs[name]
 
 
-def ds256rb(data_batch):
-    FL = 256
-    FD = 16
-    SL = 256
-    OZ = 50
-    outputs = {}
-    names = []
-    name = 'strided-conv'
-    names.append(name)
-    output = tf.layers.conv1d(data_batch, FD, FL, strides=SL, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
 
-    name = 'conv-1'
-    names.append(name)
-    output = tf.layers.conv1d(outputs['strided-conv'], 32, 8, strides=1, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'maxp-1'
-    names.append(name)
-    outputs[name] = tf.layers.max_pooling1d(outputs['conv-1'], pool_size=4, strides=4, name=name)
-
-    name = 'conv-2'
-    names.append(name)
-    output = tf.layers.conv1d(outputs['maxp-1'], 32, 8, strides=1, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'maxp-2'
-    names.append(name)
-    outputs[name] = tf.layers.max_pooling1d(outputs['conv-2'], pool_size=4, strides=4, name=name)
-
-    name = 'flatten'
-    names.append(name)
-    outputs[name] = tf.reshape(outputs['maxp-2'], [int(outputs['maxp-2'].shape[0]), -1])
-
-    name = 'fcl-1'
-    names.append(name)
-    outputs[name] = tf.layers.dense(outputs['flatten'], 100, activation=tf.nn.elu, name=name)
-
-    name = 'fcl-2'
-    names.append(name)
-    outputs[name] = tf.layers.dense(outputs['fcl-1'], OZ, activation=tf.identity, name=name)
-    return outputs[name]
 
 
 def ds256rc(data_batch):
