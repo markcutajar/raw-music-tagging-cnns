@@ -7,7 +7,6 @@ TODO: docstrings
 """
 import os
 import json
-import numpy as np
 import tensorflow as tf
 import multiprocessing
 from tensorflow.python.lib.io import file_io
@@ -92,7 +91,7 @@ class DataProvider(object):
         self._filename_queue = tf.train.string_input_producer(
             filenames, num_epochs=num_epochs)
 
-    def raw_input_fn(self):
+    def batch_in(self):
 
         # Load the data from the
         with tf.name_scope('InputGenerator'):
@@ -110,7 +109,7 @@ class DataProvider(object):
                 }
             )
 
-        with tf.name_scope('decode_cast'):
+        with tf.name_scope('Decoding'):
             if self._sample_depth != 1:
                 original_song = tf.cast(tf.decode_raw(features['song'], tf.float64), tf.float32)
                 all_song = tf.reshape(original_song, [-1, self._max_samples, self._sample_depth])
@@ -118,9 +117,8 @@ class DataProvider(object):
                 all_song = tf.cast(tf.decode_raw(features['song'], tf.int32), tf.float32)
             all_tags = tf.cast(tf.decode_raw(features['tags'], tf.int32), tf.float32)
 
-
         # Reduce tags, selective tags, merge tags
-        with tf.name_scope('tag_prep'):
+        with tf.name_scope('TagPrep'):
             if self._selective_tags is not None:
                 selective_group_tags = []
                 for group in self._selective_tags:
@@ -141,10 +139,9 @@ class DataProvider(object):
                     raise ValueError('target_size must be -1 or > 0')
                 tags = tf.slice(all_tags, [0, 0], [-1, target_size])
 
-
         # Reduce samples depending on num_samples
         # This is not definite if window_size is given
-        with tf.name_scope('sample_prep'):
+        with tf.name_scope('SamplePrep'):
             if self._num_samples is None or self._num_samples == -1:
                 num_samples = self._max_samples
             elif self._num_samples > 1:
@@ -159,20 +156,9 @@ class DataProvider(object):
             else:
                 song = tf.slice(all_song, [0, start_red, 0], [-1, num_samples, -1])
 
-        # Shuffle
-        with tf.name_scope('shuffle'):
-            if self._shuffle:
-                song, tags = tf.train.shuffle_batch(
-                    [song, tags],
-                    batch_size=self._batch_size,
-                    capacity=self._batch_size*10,
-                    num_threads=multiprocessing.cpu_count(),
-                    min_after_dequeue=10,
-                    enqueue_many=True)
-
         # If window_size is not none check even samples and reduce
         # appropriately.
-        with tf.name_scope('win_prep'):
+        with tf.name_scope('WinPrep'):
             if self._window_size is not None:
                 if self._window_size == 0:
                     raise ValueError('Window size must be None or > 0.'
@@ -185,8 +171,27 @@ class DataProvider(object):
                 else:
                     song = tf.slice(song, [0, 0], [-1, samples_to_keep])
 
+        # Trim all zero samples
+        with tf.name_scope('RmUnused'):
+            target_sums = tf.reduce_sum(tags, axis=1, name='target_sum')
+            where = tf.not_equal(target_sums, tf.constant(0, dtype=tf.float32))
+            indices = tf.squeeze(tf.where(where), axis=1, name='squeeze_indices')
+            song = tf.gather(song, indices, name='song_reduction')
+            tags = tf.gather(tags, indices, name='tags_reduction')
+
+        # Batch and enqueue
+        with tf.name_scope('Shuffle'):
+            if self._shuffle:
+                song, tags = tf.train.shuffle_batch(
+                    [song, tags],
+                    batch_size=self._batch_size,
+                    capacity=self._batch_size*10,
+                    num_threads=multiprocessing.cpu_count(),
+                    enqueue_many=True,
+                    min_after_dequeue=self._batch_size)
+
         # Reshape depending on shape parameter
-        with tf.name_scope('shape_set'):
+        with tf.name_scope('SetShape'):
             if self._data_shape == 'flat':
                 if self._sample_depth == 1:
                     feats = song
@@ -201,7 +206,7 @@ class DataProvider(object):
                 raise ValueError('Shape not recognized!')
 
         # Create windows depending on window_size parameter
-        with tf.name_scope('win_split'):
+        with tf.name_scope('Windowing'):
             if self._window_size is not None:
                 num_windows = int(num_samples / self._window_size)
                 feats = tf.split(value=feats,
