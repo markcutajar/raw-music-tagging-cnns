@@ -9,7 +9,7 @@ EVAL_FILE=gs://magnatagatune_dataset/valid_fbanksdata.tfrecords
 METADATA_FILE=gs://magnatagatune_dataset/fbank40_metadata.json
 TRAIN_STEPS=18102
 REGION=us-east1
-LEARNING_RATE=0.1
+LEARNING_RATE=0.01
 CONFIG=config.yaml
 WINDOW_SIZE=323
 

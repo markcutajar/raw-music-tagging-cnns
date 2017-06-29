@@ -8,7 +8,7 @@ TRAIN_FILE=gs://magnatagatune_dataset/train_rawdata.tfrecords
 EVAL_FILE=gs://magnatagatune_dataset/valid_rawdata.tfrecords
 METADATA_FILE=gs://magnatagatune_dataset/raw_metadata.json
 TRAIN_STEPS=18102
-LEARNING_RATE=0.1
+LEARNING_RATE=0.001
 REGION=us-east1
 CONFIG=config.yaml
 
