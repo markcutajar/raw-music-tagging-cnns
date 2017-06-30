@@ -208,7 +208,7 @@ def ds256rb(data_batch, mode):
 
     name = 'CL2'
     with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['CL1'], 32, 8, strides=1, activation=None, name='conv')
+        output = tf.layers.conv1d(outputs['CL1'], 16, 8, strides=1, activation=None, name='conv')
         output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode == TRAIN))
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
@@ -217,7 +217,7 @@ def ds256rb(data_batch, mode):
 
     name = 'CL3'
     with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP1'], 32, 8, strides=1, activation=None, name='conv')
+        output = tf.layers.conv1d(outputs['MP1'], 16, 8, strides=1, activation=None, name='conv')
         output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode == TRAIN))
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
@@ -233,6 +233,103 @@ def ds256rb(data_batch, mode):
     name = 'FCL2'
     outputs[name] = tf.layers.dense(outputs['FCL1'], output_size, activation=tf.identity, name=name)
     return outputs[name]
+
+# Basic MLP for quick testing
+def basic(data_batch, mode):
+    output_size = 50
+    outputs = {}
+    name = 'FLTN'
+    outputs[name] = tf.reshape(data_batch, [int(data_batch.shape[0]), -1], name=name)
+
+    name = 'FCL1'
+    outputs[name] = tf.layers.dense(outputs['FLTN'], 300, activation=tf.nn.elu, name=name)
+
+    name = 'FCL2'
+    outputs[name] = tf.layers.dense(outputs['FCL1'], output_size, activation=tf.identity, name=name)
+    return outputs[name]
+
+# Basic convolutional neural network
+def mkc_r(data_batch, mode):
+    output_size=50
+    outputs = {}
+    name = 'CL1'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(data_batch, 4, 16, strides=16, activation=None,  name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'CL2'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(outputs['CL1'], 8, 8, strides=4, activation=None, name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'MP1'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=2, strides=2, name=name)
+
+    name = 'CL3'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(outputs['MP1'], 12, 4, strides=1, activation=None, name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'MP2'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=2, strides=2, name=name)
+
+    name = 'FLTN'
+    outputs[name] = tf.reshape(outputs['MP2'], [int(outputs['MP2'].shape[0]), -1], name=name)
+
+    name = 'FCL1'
+    outputs[name] = tf.layers.dense(outputs['FLTN'], 1000, activation=tf.nn.elu, name=name)
+
+    name = 'FCL2'
+    outputs[name] = tf.layers.dense(outputs['FCL1'], 300, activation=tf.nn.elu, name=name)
+
+    name = 'FCL3'
+    outputs[name] = tf.layers.dense(outputs['FCL2'], output_size, activation=tf.identity, name=name)
+    return outputs[name]
+
+# Basic convolutional neural network for windowed
+def mkc_rw(data_batch, mode):
+    output_size=50
+    outputs = {}
+    name = 'CL1'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(data_batch, 4, 16, strides=4, activation=None,  name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'CL2'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(outputs['CL1'], 8, 8, strides=2, activation=None, name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'MP1'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=2, strides=2, name=name)
+
+    name = 'CL3'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(outputs['MP1'], 12, 4, strides=1, activation=None, name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'MP2'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=2, strides=2, name=name)
+
+    name = 'FLTN'
+    outputs[name] = tf.reshape(outputs['MP2'], [int(outputs['MP2'].shape[0]), -1], name=name)
+
+    name = 'FCL1'
+    outputs[name] = tf.layers.dense(outputs['FLTN'], 1000, activation=tf.nn.elu, name=name)
+
+    name = 'FCL2'
+    outputs[name] = tf.layers.dense(outputs['FCL1'], 300, activation=tf.nn.elu, name=name)
+
+    name = 'FCL3'
+    outputs[name] = tf.layers.dense(outputs['FCL2'], output_size, activation=tf.identity, name=name)
+    return outputs[name]
+
 
 # ---------------------------------------------------------------------------------------------------------------------
 # In Development
