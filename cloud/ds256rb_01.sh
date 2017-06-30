@@ -14,7 +14,7 @@ CONFIG=config.yaml
 
 gcloud ml-engine jobs submit training $JOB_NAME \
 --stream-logs \
---runtime-version 1.0 \
+--runtime-version 1.2 \
 --job-dir $JOB_DIR \
 --module-name trainer.task \
 --package-path trainer/ \

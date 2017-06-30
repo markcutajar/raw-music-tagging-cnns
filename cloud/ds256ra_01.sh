@@ -1,5 +1,5 @@
-TEST_SCRIPT_NAME=ds256ra_01
-MODEL=ds256ra
+TEST_SCRIPT_NAME=mkc_r_01
+MODEL=mkc_r
 
 current_date=$(date +%m%d_%H%M)
 JOB_NAME=${TEST_SCRIPT_NAME}_${current_date}
@@ -7,14 +7,14 @@ JOB_DIR=gs://magnatagatune_dataset/out_$JOB_NAME
 TRAIN_FILE=gs://magnatagatune_dataset/train_rawdata.tfrecords
 EVAL_FILE=gs://magnatagatune_dataset/valid_rawdata.tfrecords
 METADATA_FILE=gs://magnatagatune_dataset/raw_metadata.json
-TRAIN_STEPS=18102
+TRAIN_STEPS=13577
 LEARNING_RATE=0.001
 REGION=us-east1
 CONFIG=config.yaml
 
 gcloud ml-engine jobs submit training $JOB_NAME \
 --stream-logs \
---runtime-version 1.0 \
+--runtime-version 1.2 \
 --job-dir $JOB_DIR \
 --module-name trainer.task \
 --package-path trainer/ \
