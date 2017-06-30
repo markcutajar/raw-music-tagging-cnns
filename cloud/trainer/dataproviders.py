@@ -119,35 +119,16 @@ class DataProvider(object):
 
         # Reduce tags, selective tags, merge tags
         with tf.name_scope('TagPrep'):
-            if self._selective_tags is not None:
-                selective_group_tags = []
-                for group in self._selective_tags:
-                    merged_group_tags = []
-                    for tag in group:
-                        merged_group_tags.append(tf.slice(all_tags, [0, tag], [-1, 1]))
-                    selective_group_tags.append(tf.clip_by_value(tf.add_n(merged_group_tags),
-                                                                 tf.constant(0, dtype=tf.float32),
-                                                                 tf.constant(1, dtype=tf.float32)))
-                    tags = tf.concat(selective_group_tags, axis=1)
-
-            else:
-                if self._num_tags is None or self._num_tags == -1:
-                    target_size = self._max_tags
-                elif self._num_tags > 0:
-                    target_size = min(self._num_tags, self._max_tags)
-                else:
-                    raise ValueError('target_size must be -1 or > 0')
-                tags = tf.slice(all_tags, [0, 0], [-1, target_size])
+            tags = tf.slice(all_tags, [0, 0], [-1, 50])
 
         # Reduce samples depending on num_samples
         # This is not definite if window_size is given
         with tf.name_scope('SamplePrep'):
             if self._num_samples is None or self._num_samples == -1:
                 num_samples = self._max_samples
-            elif self._num_samples > 1:
-                num_samples = min(self._num_samples, self._max_samples)
             else:
-                raise ValueError('Number of samples must be -1 or > 0')
+                num_samples = min(self._num_samples, self._max_samples)
+
             difference = self._max_samples - num_samples
             start_red = int(difference / 2.0)
 
@@ -156,20 +137,6 @@ class DataProvider(object):
             else:
                 song = tf.slice(all_song, [0, start_red, 0], [-1, num_samples, -1])
 
-        # If window_size is not none check even samples and reduce
-        # appropriately.
-        with tf.name_scope('WinPrep'):
-            if self._window_size is not None:
-                if self._window_size == 0:
-                    raise ValueError('Window size must be None or > 0.'
-                                     'A value {} given.'.format(self._window_size))
-                # window_size is samples per window
-                # Int wil floor the float number
-                samples_to_keep = (int(num_samples / self._window_size) * self._window_size)
-                if self._sample_depth != 1:
-                    song = tf.slice(song, [0, 0, 0], [-1, samples_to_keep, -1])
-                else:
-                    song = tf.slice(song, [0, 0], [-1, samples_to_keep])
 
         # Trim all zero samples
         with tf.name_scope('RmUnused'):
@@ -192,26 +159,9 @@ class DataProvider(object):
 
         # Reshape depending on shape parameter
         with tf.name_scope('SetShape'):
-            if self._data_shape == 'flat':
-                if self._sample_depth == 1:
-                    feats = song
-                else:
-                    feats = tf.reshape(song, [-1, self._sample_depth * num_samples])
-            elif self._data_shape == 'image':
-                if self._sample_depth == 1:
-                    feats = tf.expand_dims(song, axis=2)
-                else:
-                    feats = tf.expand_dims(song, axis=3)
+            if self._sample_depth == 1:
+                feats = tf.expand_dims(song, axis=2)
             else:
-                raise ValueError('Shape not recognized!')
+                feats = tf.expand_dims(song, axis=3)
 
-        # Create windows depending on window_size parameter
-        with tf.name_scope('Windowing'):
-            if self._window_size is not None:
-                num_windows = int(num_samples / self._window_size)
-                feats = tf.split(value=feats,
-                                 num_or_size_splits=num_windows,
-                                 axis=1,
-                                 name='window_splitter')
-                feats = tf.convert_to_tensor(feats)
         return feats, tags
