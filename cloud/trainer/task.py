@@ -370,6 +370,7 @@ def run(target,
                             meta_writer.add_run_metadata(run_metadata,
                                                          'run_metadata_{}'.format(step),
                                                          global_step=step)
+            session.close()
 
 
 # ---------------------------------------------------------------------------------------------------------------------
