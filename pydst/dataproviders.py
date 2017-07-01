@@ -101,9 +101,6 @@ class DataProvider(object):
             features = tf.parse_example(
                 serialized_example,
                 features={
-                    'num_samples': tf.FixedLenFeature([], tf.int64),
-                    'sample_depth': tf.FixedLenFeature([], tf.int64),
-                    'num_tags': tf.FixedLenFeature([], tf.int64),
                     'tags': tf.FixedLenFeature([], tf.string),
                     'song': tf.FixedLenFeature([], tf.string)
                 }
