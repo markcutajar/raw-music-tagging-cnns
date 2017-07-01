@@ -5,16 +5,14 @@ This function can be used as both a standalone function
 or imported in a different class.
 """
 
-import io
-import os
 import csv
 import logging
 import numpy as np
-from array import array
 import tensorflow as tf
 from pydst import DEFAULT_SEED
 from pydub import AudioSegment
 from time import gmtime, strftime
+from python_speech_features import logfbank
 
 # Define logger, formatter and handler
 LOGGER_FORMAT = '%(levelname)s:%(asctime)s:%(name)s:%(message)s'
@@ -126,7 +124,7 @@ def extract_data(mp3s_split, targets_split, root):
     """
     for setname, mp3_filenames in mp3s_split.items():
 
-        save_name = root + setname + '_win_rawdata.tfrecords'
+        save_name = root + setname + '_win_fbanksdata.tfrecords'
         writer = tf.python_io.TFRecordWriter(save_name)
 
         for idx, mp3_filename in enumerate(mp3_filenames):
@@ -145,6 +143,7 @@ def extract_data(mp3s_split, targets_split, root):
 
                 # For each window save example into record
                 for window in windowed_samples:
+                    window = logfbank(signal=window, samplerate=16000, nfft=512, nfilt=40)
                     window_samples_string = window.tostring()
 
                     record = tf.train.Example(features=tf.train.Features(
