@@ -143,6 +143,14 @@ class DataProvider(object):
             song = tf.gather(song, indices, name='song_reduction')
             tags = tf.gather(tags, indices, name='tags_reduction')
 
+
+        with tf.name_scope('Normalization'):
+            scale_max = tf.reduce_max(song)
+            scale_min = tf.reduce_min(song)
+            factor = tf.maximum(scale_max, scale_min)
+            song = tf.div(song, factor)
+
+
         # Batch and enqueue
         with tf.name_scope('Shuffle'):
             if self._shuffle:
