@@ -41,14 +41,15 @@ def controller(function_name,
         global_step = tf.contrib.framework.get_or_create_global_step()
         name = 'error'
         with tf.name_scope(name):
-            error = tf.losses.sigmoid_cross_entropy(
-                multi_class_labels=targets_batch, logits=logits, weights=tf.constant(3))
-            # error = weighted_sigmoid_cross_entropy(logits=logits, labels=targets_batch, false_negatives_weight=30)
-            # tf.losses.add_loss(error)
+            # error = tf.losses.sigmoid_cross_entropy(
+            #     multi_class_labels=targets_batch, logits=logits, weights=tf.constant(3))
+            error = weighted_sigmoid_cross_entropy(logits=logits, labels=targets_batch, false_negatives_weight=10)
+            tf.losses.add_loss(error)
 
         if mode in TRAIN:
             with tf.name_scope('train'):
-                train_step = tf.train.AdamOptimizer(learning_rate).minimize(error, global_step=global_step)
+                #train_step = tf.train.AdamOptimizer(learning_rate).minimize(error, global_step=global_step)
+                train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(error, global_step=global_step)
             return train_step, global_step, error
 
         else:
@@ -113,7 +114,6 @@ def perclass_metrics(predictions, targets_batch):
 
         #perclass_dict[str(idx)+'_aucpr'] = tf.contrib.metrics.streaming_auc(
         #    pred_tag, targets_per_tag_list[idx], curve='PR', name='aucpr')
-
     return perclass_dict
 
 def weighted_sigmoid_cross_entropy(logits, labels, false_negatives_weight):
@@ -183,7 +183,6 @@ def ds256ra(data_batch, mode):
     outputs[name] = tf.layers.dense(outputs['FCL1'], output_size, activation=tf.identity, name=name)
     return outputs[name]
 
-
 # Model proposed by Dieleman et al. using Raw data
 # First Conv: FL256, FS16, FD6
 # Output: 50 Neurons
@@ -248,20 +247,21 @@ def basic(data_batch, mode):
     outputs[name] = tf.layers.dense(outputs['FCL1'], output_size, activation=tf.identity, name=name)
     return outputs[name]
 
-# Basic convolutional neural network
+# Basic CNN for raw data with
+# batch normalization.
 def mkc_r(data_batch, mode):
     output_size=50
     outputs = {}
     name = 'CL1'
     with tf.variable_scope(name):
         output = tf.layers.conv1d(data_batch, 4, 16, strides=16, activation=None,  name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)#(mode==TRAIN))
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'CL2'
     with tf.variable_scope(name):
         output = tf.layers.conv1d(outputs['CL1'], 8, 8, strides=4, activation=None, name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)#(mode==TRAIN))
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'MP1'
@@ -270,7 +270,7 @@ def mkc_r(data_batch, mode):
     name = 'CL3'
     with tf.variable_scope(name):
         output = tf.layers.conv1d(outputs['MP1'], 12, 4, strides=1, activation=None, name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)#(mode==TRAIN))
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'MP2'
@@ -289,20 +289,21 @@ def mkc_r(data_batch, mode):
     outputs[name] = tf.layers.dense(outputs['FCL2'], output_size, activation=tf.identity, name=name)
     return outputs[name]
 
-# Basic convolutional neural network for windowed
+# Basic CNN for windowed raw data
+# with batch normalization.
 def mkc_rw(data_batch, mode):
     output_size=50
     outputs = {}
     name = 'CL1'
     with tf.variable_scope(name):
-        output = tf.layers.conv1d(data_batch, 4, 16, strides=4, activation=None,  name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        output = tf.layers.conv1d(data_batch, 4, 64, strides=4, activation=None,  name='conv')
+        #output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'CL2'
     with tf.variable_scope(name):
         output = tf.layers.conv1d(outputs['CL1'], 8, 8, strides=2, activation=None, name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        #output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'MP1'
@@ -311,7 +312,7 @@ def mkc_rw(data_batch, mode):
     name = 'CL3'
     with tf.variable_scope(name):
         output = tf.layers.conv1d(outputs['MP1'], 12, 4, strides=1, activation=None, name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        #output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'MP2'
@@ -325,6 +326,89 @@ def mkc_rw(data_batch, mode):
 
     name = 'FCL2'
     outputs[name] = tf.layers.dense(outputs['FCL1'], 300, activation=tf.nn.elu, name=name)
+
+    name = 'FCL3'
+    outputs[name] = tf.layers.dense(outputs['FCL2'], output_size, activation=tf.identity, name=name)
+    return outputs[name]
+
+# Basic CNN with L2 regularization
+# and no batch normalization.
+def mkc_r_l2(data_batch, mode):
+    regularizer = tf.contrib.layers.l2_regularizer(scale=0.1)
+    actfn = tf.nn.elu
+    output_size=50
+    outputs = {}
+    name = 'CL1'
+    with tf.variable_scope(name):
+        outputs[name] = tf.layers.conv1d(data_batch, 4, 16, strides=16, activation=actfn,  name='conv',
+                                  kernel_regularizer=regularizer)
+
+    name = 'CL2'
+    with tf.variable_scope(name):
+        outputs[name] = tf.layers.conv1d(outputs['CL1'], 8, 8, strides=4, activation=actfn, name='conv',
+                                  kernel_regularizer=regularizer)
+
+    name = 'MP1'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=2, strides=2, name=name)
+
+    name = 'CL3'
+    with tf.variable_scope(name):
+        outputs[name] = tf.layers.conv1d(outputs['MP1'], 12, 4, strides=1, activation=actfn, name='conv',
+                                  kernel_regularizer=regularizer)
+
+    name = 'MP2'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=2, strides=2, name=name)
+
+    name = 'FLTN'
+    outputs[name] = tf.reshape(outputs['MP2'], [int(outputs['MP2'].shape[0]), -1], name=name)
+
+    name = 'FCL1'
+    outputs[name] = tf.layers.dense(outputs['FLTN'], 6000, activation=tf.nn.elu, name=name)
+
+    name = 'FCL2'
+    outputs[name] = tf.layers.dense(outputs['FCL1'], 2000, activation=tf.nn.elu, name=name)
+
+    name = 'FCL3'
+    outputs[name] = tf.layers.dense(outputs['FCL2'], output_size, activation=tf.identity, name=name)
+    return outputs[name]
+
+# Basic CNN for fbanks data with
+# batch normalization.
+def mkc_f(data_batch, mode):
+    output_size=50
+    outputs = {}
+    name = 'CL1'
+    with tf.variable_scope(name):
+        output = tf.layers.conv2d(data_batch, 4, [16, 1], strides=[16, 1], activation=None,  name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)#(mode==TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'CL2'
+    with tf.variable_scope(name):
+        output = tf.layers.conv2d(outputs['CL1'], 8, [8, 1], strides=[4, 1], activation=None, name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)#(mode==TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'MP1'
+    outputs[name] = tf.layers.max_pooling2d(outputs['CL2'], pool_size=[2, 1], strides=[2, 1], name=name)
+
+    name = 'CL3'
+    with tf.variable_scope(name):
+        output = tf.layers.conv2d(outputs['MP1'], 12, [4, 1], strides=[1, 1], activation=None, name='conv')
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)#(mode==TRAIN))
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    name = 'MP2'
+    outputs[name] = tf.layers.max_pooling2d(outputs['CL3'], pool_size=[2, 1], strides=[2, 1], name=name)
+
+    name = 'FLTN'
+    outputs[name] = tf.reshape(outputs['MP2'], [int(outputs['MP2'].shape[0]), -1], name=name)
+
+    name = 'FCL1'
+    outputs[name] = tf.layers.dense(outputs['FLTN'], 3000, activation=tf.nn.elu, name=name)
+
+    name = 'FCL2'
+    outputs[name] = tf.layers.dense(outputs['FCL1'], 1000, activation=tf.nn.elu, name=name)
 
     name = 'FCL3'
     outputs[name] = tf.layers.dense(outputs['FCL2'], output_size, activation=tf.identity, name=name)
@@ -374,8 +458,6 @@ def ds256fa(data_batch):
     names.append(name)
     outputs[name] = tf.layers.dense(outputs['fcl-1'], OZ, activation=tf.identity, name=name)
     return outputs[name]
-
-
 def ds256ra_t3(data_batch):
     FL = 256
     FD = 1
@@ -429,11 +511,6 @@ def ds256ra_t3(data_batch):
     with tf.name_scope(name):
         outputs[name] = tf.layers.dense(outputs['fcl-1'], OZ, activation=tf.identity, name=name)
     return outputs[name]
-
-
-
-
-
 def ds256rc(data_batch):
     FL = 16
     FD = 16
@@ -479,8 +556,6 @@ def ds256rc(data_batch):
     names.append(name)
     outputs[name] = tf.layers.dense(outputs['fcl-1'], OZ, activation=tf.identity, name=name)
     return outputs[name]
-
-
 def ds256rd(data_batch):
     FL = 256
     FD = 16
@@ -526,8 +601,6 @@ def ds256rd(data_batch):
     names.append(name)
     outputs[name] = tf.layers.dense(outputs['fcl-1'], OZ, activation=tf.identity, name=name)
     return outputs[name]
-
-
 def ds256re(data_batch):
     FL = 16
     FD = 16
@@ -573,8 +646,6 @@ def ds256re(data_batch):
     names.append(name)
     outputs[name] = tf.layers.dense(outputs['fcl-1'], OZ, activation=tf.identity, name=name)
     return outputs[name]
-
-
 def ds256rf(data_batch):
     FL = 16
     FD = 16
