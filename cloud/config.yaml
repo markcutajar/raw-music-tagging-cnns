@@ -1,7 +1,7 @@
 trainingInput:
   scaleTier: CUSTOM
   masterType: complex_model_m
-  workerType: complex_model_m
+  workerType: standard
   parameterServerType: standard
-  workerCount: 4
-  parameterServerCount: 3
+  workerCount: 7
+  parameterServerCount: 2
