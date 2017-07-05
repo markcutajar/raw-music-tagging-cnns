@@ -201,7 +201,7 @@ def run(target,
         target_size,
         selective_tags,
         num_song_samples,
-        window_size,
+        windowing_type,
         data_shape):
     """Run the training and evaluation graph.
 
@@ -229,8 +229,10 @@ def run(target,
         target_size (int): The number of tags being use as an output
         selective_tags (filename): Filename for selective tags in json
         num_song_samples (int): Samples from the songs to be used for training
-        window_size (int): Number of samples to be used in a window. If None,
-            no windowing will be used.
+        windowing_type (str): The type of windowing to be used.
+            None: No windowing
+            STME: Seperate training and merged evaluation
+            SPM: Super-pooled model
         data_shape (string): Shape of data - depending on the model used
     """
 
@@ -257,7 +259,6 @@ def run(target,
                 selective_tags=selective_tags,
                 num_tags=target_size,
                 num_samples=num_song_samples,
-                window_size=window_size,
                 data_shape=data_shape
             )
 
@@ -271,10 +272,10 @@ def run(target,
                 features,
                 labels,
                 learning_rate=learning_rate,
-                window=bool(window_size)
+                window=windowing_type
             )
 
-        # Hok for monitored training session
+        # Hook for monitored training session
         hooks = [EvaluationRunHook(
             job_dir,
             metrics,
@@ -300,7 +301,6 @@ def run(target,
                 selective_tags=selective_tags,
                 num_tags=target_size,
                 num_samples=num_song_samples,
-                window_size=window_size,
                 data_shape=data_shape
             )
 
@@ -314,7 +314,7 @@ def run(target,
                 features,
                 labels,
                 learning_rate=learning_rate,
-                window=bool(window_size)
+                window=windowing_type
             )
 
         # Summary for training error
@@ -502,12 +502,14 @@ if __name__ == "__main__":
                         evaluation and prediction process.
                         """)
 
-    parser.add_argument('--window-size',
-                        type=int,
+    parser.add_argument('--windowing-type',
+                        type=str,
                         default=None,
                         help="""\
-                            Number of samples in one window. If None is 
-                            given, no windowing is used.
+                            The type of windowing to be used by the function.
+                            None: No windowing.
+                            stme: Seperate training and merged evaluation.
+                            spm: Super-pooled output layer model
                             """)
 
     parser.add_argument('--data-shape',
