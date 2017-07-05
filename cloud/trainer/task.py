@@ -22,7 +22,7 @@ tf.logging.set_verbosity(tf.logging.INFO)
 
 TRAIN_CHECKPOINT = 60
 TRAIN_SUMMARIES = 60
-CHECKPOINT_PER_EVAL = 8
+CHECKPOINT_PER_EVAL = 2
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -132,8 +132,8 @@ class EvaluationRunHook(tf.train.SessionRunHook):
         """Called at then end of session to make sure we always evaluate."""
         self._update_latest_checkpoint()
 
-        with self._eval_lock:
-            self._run_eval()
+        #with self._eval_lock:
+        #    self._run_eval()
 
     def _run_eval(self):
         """Run model evaluation and generate summaries."""
@@ -290,8 +290,8 @@ def run(target,
     training_graph = tf.Graph()
     with training_graph.as_default():
 
-        with tf.device(tf.train.replica_device_setter(cluster=cluster)):
-            # Training data provicer
+        with tf.device(tf.train.replica_device_setter()):#cluster=cluster)):
+            # Training data provider
             train_data = DataProvider(
                 [train_files],
                 metadata_files,
@@ -366,11 +366,10 @@ def run(target,
                     step, _, error = session.run([global_step_tensor, train_op, error_summary],
                                                  options=run_options, run_metadata=run_metadata)
                     if is_chief:
-                        if step == 10 or step % 2000 == 0:
-                            meta_writer.add_run_metadata(run_metadata,
-                                                         'run_metadata_{}'.format(step),
-                                                         global_step=step)
-            session.close()
+                       if step == 10 or step % 2000 == 0:
+                           meta_writer.add_run_metadata(run_metadata,
+                                                        'run_metadata_{}'.format(step),
+                                                        global_step=step)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
