@@ -43,7 +43,11 @@ def controller(function_name,
         with tf.name_scope(name):
             # error = tf.losses.sigmoid_cross_entropy(
             #     multi_class_labels=targets_batch, logits=logits, weights=tf.constant(3))
-            error = weighted_sigmoid_cross_entropy(logits=logits, labels=targets_batch, false_negatives_weight=10)
+            class_weights = balancing_weights(50, 'log', 10)
+            error = weighted_sigmoid_cross_entropy(logits=logits,
+                                                   labels=targets_batch,
+                                                   false_negatives_weight=10,
+                                                   balancing_weights_vector=class_weights)
             tf.losses.add_loss(error)
 
         if mode in TRAIN:
@@ -116,7 +120,7 @@ def perclass_metrics(predictions, targets_batch):
         #    pred_tag, targets_per_tag_list[idx], curve='PR', name='aucpr')
     return perclass_dict
 
-def weighted_sigmoid_cross_entropy(logits, labels, false_negatives_weight):
+def weighted_sigmoid_cross_entropy(logits, labels, false_negatives_weight, balancing_weights_vector):
 
     fnw = tf.constant(false_negatives_weight, dtype=tf.float32)
     weighting = tf.maximum(1.0, tf.multiply(fnw, labels))
@@ -125,9 +129,20 @@ def weighted_sigmoid_cross_entropy(logits, labels, false_negatives_weight):
     log_exp = tf.log(tf.add(tf.constant(1.0),
                             tf.exp(tf.multiply(tf.constant(-1.0), tf.abs(logits)))))
     error_matrix = tf.add(tf.subtract(false_p_coefficient, false_n_coefficient), log_exp)
-    error = tf.reduce_mean(error_matrix)
+    error = tf.reduce_mean(error_matrix, axis=0)
+    error = tf.multiply(error, balancing_weights_vector)
+    error = tf.reduce_mean(error)
     return error
 
+
+def balancing_weights(num_classes, function, factor):
+    if function == 'log':
+        class_weights = tf.constant(list(range(1, num_classes+1)), dtype=tf.float32)
+        class_weights = tf.add(tf.multiply(tf.constant(factor, dtype=tf.float32),
+                                     tf.log(class_weights)), tf.constant(1.0))
+        return class_weights
+    else:
+        raise NotImplementedError('Function {} not implemented! Only Log!'.format(function))
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Models
