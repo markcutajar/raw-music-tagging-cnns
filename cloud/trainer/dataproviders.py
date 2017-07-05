@@ -25,7 +25,6 @@ class DataProvider(object):
                  selective_tags=None,
                  num_samples=None,
                  data_shape='image',
-                 window_size=None,
                  shuffle=True):
 
         """Class to load the data and provide batches to
@@ -48,7 +47,6 @@ class DataProvider(object):
         """
         self._batch_size = batch_size
         self._num_tags = num_tags
-        self._window_size = window_size
 
         self._num_samples = num_samples
         self._data_shape = data_shape
