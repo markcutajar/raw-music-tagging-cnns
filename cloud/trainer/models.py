@@ -3,7 +3,7 @@
 import tensorflow as tf
 
 TRAIN, EVAL, PREDICT = 'TRAIN', 'EVAL', 'PREDICT'
-
+STME, SPM = 'STME', 'SPM'
 # ---------------------------------------------------------------------------------------------------------------------
 # Controller
 # ---------------------------------------------------------------------------------------------------------------------
@@ -19,8 +19,8 @@ def controller(function_name,
     # Load model
     model = globals()[function_name]
 
-    # Get logits depending if windowed inputs or not
-    if window:
+    if window in STME and mode in EVAL:
+        # model with tf.map_fn
         logits_array = tf.map_fn(lambda w: model(w, mode),
                                  elems=data_batch,
                                  back_prop=True,
@@ -28,7 +28,18 @@ def controller(function_name,
 
         logits = tf.concat(logits_array, axis=0, name='windowLogits')
         logits = tf.reduce_mean(logits, axis=0, name='averageLogits')
+    elif window in SPM:
+        # super pooled model
+        # model with tf.map_fn
+        logits_array = tf.map_fn(lambda w: model(w, mode),
+                                 elems=data_batch,
+                                 back_prop=True,
+                                 name='MapModels')
+
+        # Use super pooling model
+        logits = superpoolA(tf.concat(logits_array, axis=1, name='mergingLogits'))
     else:
+        # normal model
         logits = model(data_batch, mode)
 
     # Get tag predictions
@@ -143,6 +154,19 @@ def balancing_weights(num_classes, function, factor):
         return class_weights
     else:
         raise NotImplementedError('Function {} not implemented! Only Log!'.format(function))
+
+
+def superpoolA(data):
+    superpool_outputs = {}
+    name = 'FCL1'
+    superpool_outputs[name] = tf.layers.dense(data, 600, activation=tf.nn.elu, name=name)
+
+    name = 'FCL2'
+    superpool_outputs[name] = tf.layers.dense(superpool_outputs['FCL1'], 600, activation=tf.nn.elu, name=name)
+
+    name = 'FCL3'
+    superpool_outputs[name] = tf.layers.dense(superpool_outputs['FCL2'], 50, activation=tf.identity, name=name)
+    return superpool_outputs[name]
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Models
