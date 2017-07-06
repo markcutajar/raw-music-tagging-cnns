@@ -258,7 +258,10 @@ def run(target,
             )
 
             # Features and label tensors
-            features, labels = eval_data.batch_in()
+            if windowing_type is None:
+                features, labels = eval_data.batch_in()
+            else:
+                features, labels = eval_data.windows_batch_in()
 
             # Model for evaluation
             metrics = models.controller(
