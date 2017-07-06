@@ -105,6 +105,12 @@ class DataProvider(object):
         windowed_songs = tf.split(loaded_songs, 12, name='WindowedSongs')
         # Re-stack the data
         songs = tf.stack(windowed_songs, name='StackedSongs')
+        if self._sample_depth == 1:
+            songs = tf.reshape(songs, [-1, windows_per_song, self._max_samples])
+        else:
+            songs = tf.reshape(songs, [-1, windows_per_song, self._max_samples, self._sample_depth])
+
+
         # Gather the tags of the corresponding songs
         tags = tf.gather(loaded_tags, list(range(0, 240, 12)))
 
