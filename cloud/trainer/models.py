@@ -24,6 +24,7 @@ def controller(function_name,
         logits_array = tf.map_fn(lambda w: model(w, mode),
                                  elems=data_batch,
                                  back_prop=True,
+                                 parallel_iterations=12,
                                  name='MapModels')
 
         logits = tf.concat(logits_array, axis=0, name='windowLogits')
@@ -34,6 +35,7 @@ def controller(function_name,
         logits_array = tf.map_fn(lambda w: model(w, mode),
                                  elems=data_batch,
                                  back_prop=True,
+                                 parallel_iterations=12,
                                  name='MapModels')
 
         # Use super pooling model
@@ -54,7 +56,7 @@ def controller(function_name,
         with tf.name_scope(name):
             # error = tf.losses.sigmoid_cross_entropy(
             #     multi_class_labels=targets_batch, logits=logits, weights=tf.constant(3))
-            class_weights = balancing_weights(50, 'log', 10)
+            class_weights = balancing_weights(50, 'log', 104)
             error = weighted_sigmoid_cross_entropy(logits=logits,
                                                    labels=targets_batch,
                                                    false_negatives_weight=10,
