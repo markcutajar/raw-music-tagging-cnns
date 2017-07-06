@@ -256,10 +256,8 @@ def run(target,
                 metadata_files,
                 batch_size=eval_batch_size,
                 num_epochs=eval_num_epochs,
-                selective_tags=selective_tags,
                 num_tags=target_size,
-                num_samples=num_song_samples,
-                data_shape=data_shape
+                num_samples=num_song_samples
             )
 
             # Features and label tensors
@@ -298,10 +296,8 @@ def run(target,
                 metadata_files,
                 batch_size=train_batch_size,
                 num_epochs=num_epochs,
-                selective_tags=selective_tags,
                 num_tags=target_size,
-                num_samples=num_song_samples,
-                data_shape=data_shape
+                num_samples=num_song_samples
             )
 
             # Features and label tensors
