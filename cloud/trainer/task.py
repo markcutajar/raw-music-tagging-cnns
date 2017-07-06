@@ -131,8 +131,7 @@ class EvaluationRunHook(tf.train.SessionRunHook):
     def end(self, session):
         """Called at then end of session to make sure we always evaluate."""
         self._update_latest_checkpoint()
-
-        #with self._eval_lock:
+        # with self._eval_lock:
         #    self._run_eval()
 
     def _run_eval(self):
@@ -201,8 +200,7 @@ def run(target,
         target_size,
         selective_tags,
         num_song_samples,
-        windowing_type,
-        data_shape):
+        windowing_type):
     """Run the training and evaluation graph.
 
     Args:
@@ -233,7 +231,6 @@ def run(target,
             None: No windowing
             STME: Seperate training and merged evaluation
             SPM: Super-pooled model
-        data_shape (string): Shape of data - depending on the model used
     """
 
     # If the server is chief which is `master`
@@ -289,7 +286,7 @@ def run(target,
     training_graph = tf.Graph()
     with training_graph.as_default():
 
-        with tf.device(tf.train.replica_device_setter()):#cluster=cluster)):
+        with tf.device(tf.train.replica_device_setter()):  # cluster=cluster)):
             # Training data provider
             train_data = DataProvider(
                 [train_files],
@@ -362,10 +359,10 @@ def run(target,
                     step, _, error = session.run([global_step_tensor, train_op, error_summary],
                                                  options=run_options, run_metadata=run_metadata)
                     if is_chief:
-                       if step == 10 or step % 2000 == 0:
-                           meta_writer.add_run_metadata(run_metadata,
-                                                        'run_metadata_{}'.format(step),
-                                                        global_step=step)
+                        if step == 10 or step % 2000 == 0:
+                            meta_writer.add_run_metadata(run_metadata,
+                                                         'run_metadata_{}'.format(step),
+                                                         global_step=step)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -507,14 +504,6 @@ if __name__ == "__main__":
                             stme: Seperate training and merged evaluation.
                             spm: Super-pooled output layer model
                             """)
-
-    parser.add_argument('--data-shape',
-                        type=str,
-                        default='image',
-                        help="""\
-                        Shape of the data - flat - or - image -. Depending
-                        on if mlp or conv model respectively.
-                        """)
 
     parse_args, unknown = parser.parse_known_args()
 
