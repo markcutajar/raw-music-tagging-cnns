@@ -1,7 +1,0 @@
-Test format:
-<location[local(l)/cloud(c)]>run_<modelname>
-
-run_ds256_01		50 Top tags,	No window
-run_ds256_02		50 Top tags,	Window - 3.22s
-run_ds256_03		Merged tags,	
-
