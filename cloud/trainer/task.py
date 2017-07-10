@@ -22,7 +22,7 @@ tf.logging.set_verbosity(tf.logging.INFO)
 
 TRAIN_CHECKPOINT = 60
 TRAIN_SUMMARIES = 60
-CHECKPOINT_PER_EVAL = 2
+CHECKPOINT_PER_EVAL = 4  #2
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -301,7 +301,12 @@ def run(target,
             )
 
             # Features and label tensors
-            features, labels = train_data.batch_in()
+            if windowing_type is None:
+                features, labels = train_data.batch_in()
+            elif windowing_type is 'STME':
+                features, labels = train_data.batch_in()
+            else:
+                features, labels = train_data.windows_batch_in()
 
             # Model for training
             [train_op, global_step_tensor, train_error] = models.controller(
