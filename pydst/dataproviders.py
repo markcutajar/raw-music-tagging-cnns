@@ -112,16 +112,17 @@ class DataProvider(object):
 
 
         # Gather the tags of the corresponding songs
-        tags = tf.gather(loaded_tags, list(range(0, 240, 12)))
+        tags = self.tag_prep(loaded_tags)
+        tags = tf.gather(tags, list(range(0, 240, 12)))
 
         # Data preparation
-        tags = self.tag_prep(tags)
         songs, tags = self.remove_unused(songs, tags)
         songs = self.normalize(songs)
 
         # Queuing and output
         features, labels = self.batch(songs, tags)
         features = self.set_shape(features)
+        features = self.transpose_for_mapfn(features)
         return features, labels
 
     # Load data
@@ -204,6 +205,21 @@ class DataProvider(object):
             else:
                 features, labels = songs, tags
         return features, labels
+
+    # Transpose for window index before batch
+    def transpose_for_mapfn(self, songs):
+        """Function to put window number prior to batch for
+        TensorFlow map_fn function which distributes on the
+        first dimension.
+
+        :param songs: Batch of songs with dim1 being window dim
+        :return: Song permuted [1, 0, 2, 3 (...)]
+        """
+        if self._sample_depth == 1:
+            features = tf.transpose(songs, perm=[1, 0, 2, 3])
+        else:
+            features = tf.transpose(songs, perm=[1, 0, 2, 3, 4])
+        return features
 
     # Strip to top 50 tags
     @staticmethod
