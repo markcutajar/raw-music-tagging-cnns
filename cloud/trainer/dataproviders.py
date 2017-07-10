@@ -71,7 +71,7 @@ class DataProvider(object):
         loaded_songs, loaded_tags = self.decode(data)
 
         # Data preparation
-        tags = self.tag_prep(loaded_tags)
+        tags = self.tag_prep(loaded_tags, self._num_tags)
         songs = self.sample_prep(loaded_songs)
         songs, tags = self.remove_unused(songs, tags)
         songs = self.normalize(songs)
@@ -102,7 +102,7 @@ class DataProvider(object):
 
         # Merge songs and batch
         # Split into a list of 12 tensors each denoting the corresponding song
-        windowed_songs = tf.split(loaded_songs, 12, name='WindowedSongs')
+        windowed_songs = tf.split(loaded_songs, windows_per_song, name='WindowedSongs')
         # Re-stack the data
         songs = tf.stack(windowed_songs, name='StackedSongs')
         if self._sample_depth == 1:
@@ -110,12 +110,12 @@ class DataProvider(object):
         else:
             songs = tf.reshape(songs, [-1, windows_per_song, self._max_samples, self._sample_depth])
 
-
         # Gather the tags of the corresponding songs
-        tags = tf.gather(loaded_tags, list(range(0, 240, 12)))
+        #tags = tf.reshape(self.tag_prep(loaded_tags), [windows_per_song * self._batch_size, self._num_tags])
+        tags = self.tag_prep(loaded_tags, self._num_tags+1)
+        tags = tf.strided_slice(tags, [0, 0], [-1, -1], [windows_per_song, 1])
 
         # Data preparation
-        tags = self.tag_prep(tags)
         songs, tags = self.remove_unused(songs, tags)
         songs = self.normalize(songs)
 
@@ -223,7 +223,7 @@ class DataProvider(object):
 
     # Strip to top 50 tags
     @staticmethod
-    def tag_prep(tags):
+    def tag_prep(tags, shrink):
         """Clip tags to top 50.
 
         __FUTURE__ clip tags to specified amount
@@ -232,7 +232,7 @@ class DataProvider(object):
         :return: Top 50 tags
         """
         with tf.name_scope('TagPrep'):
-            clipped_tags = tf.slice(tags, [0, 0], [-1, 50])
+            clipped_tags = tf.slice(tags, [0, 0], [-1, shrink])
         return clipped_tags
 
     # Function to remove all samples that have all zeros in tags
