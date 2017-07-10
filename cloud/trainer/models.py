@@ -186,6 +186,16 @@ def superpoolA(data):
 # ---------------------------------------------------------------------------------------------------------------------
 
 
+# Model proposed by Choi et al. using Raw data
+def chra(data_batch, mode):
+    raise NotImplementedError('chra not implemented')
+
+
+# Model proposed by Choi et al. using FBanks data
+def chfa(data_batch, mode):
+    raise NotImplementedError('chfa not implemented')
+
+
 # Model proposed by Dieleman et al. using Raw data
 # First Conv: FL256, FS256, FD1
 # Output: 50 Neurons
@@ -237,7 +247,7 @@ def ds256ra(data_batch, mode):
     return outputs[name]
 
 
-# Model proposed by Dieleman et al. using FBANKS data
+# Model proposed by Dieleman et al. using FBanks data
 # Structure: 2 Conv, 2 MLP
 def ds256fa(data_batch, mode):
     output_size = 50
