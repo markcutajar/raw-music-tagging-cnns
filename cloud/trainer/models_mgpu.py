@@ -262,14 +262,14 @@ def superpoolB(data):
 
 
 def superpoolC(data):
-    with tf.variable_scope('CL1'):
+    with tf.variable_scope('CL1_SP'):
         out_CL1 = tf.layers.conv1d(data, 32, 3, strides=1, activation=None, name='conv', data_format='channel_first')
         out_CL1 = tf.layers.batch_normalization(out_CL1, name='batchNorm', training=True)
         out_CL1 = tf.nn.elu(out_CL1, name='nonLin')
 
     out_flat = tf.reshape(out_CL1, [int(out_CL1.shape[0]), -1], name='FLTN_SP')
 
-    out_FCL2 = tf.layers.dense(out_flat, 1500, activation=tf.nn.elu, name='FCL2')
+    out_FCL2 = tf.layers.dense(out_flat, 1500, activation=tf.nn.elu, name='FCSL2')
     out_FCL2 = tf.layers.dropout(out_FCL2, training=True)
 
     output_final = tf.layers.dense(out_FCL2, 50, activation=tf.identity, name='FCSL3')
@@ -277,14 +277,14 @@ def superpoolC(data):
 
 
 def superpoolD(data):
-    with tf.variable_scope('CL1'):
+    with tf.variable_scope('CL1_SP'):
         out_CL1 = tf.layers.conv1d(data, 50, 3, strides=1, activation=None, name='conv', data_format='channel_first')
         out_CL1 = tf.layers.batch_normalization(out_CL1, name='batchNorm', training=True)
         out_CL1 = tf.nn.elu(out_CL1, name='nonLin')
 
     out_flat = tf.reshape(out_CL1, [int(out_CL1.shape[0]), -1], name='FLTN_SP')
 
-    out_FCL2 = tf.layers.dense(out_flat, 500, activation=tf.nn.elu, name='FCL2')
+    out_FCL2 = tf.layers.dense(out_flat, 500, activation=tf.nn.elu, name='FCSL2')
     out_FCL2 = tf.layers.dropout(out_FCL2, training=True)
 
     output_final = tf.layers.dense(out_FCL2, 50, activation=tf.identity, name='FCSL3')
