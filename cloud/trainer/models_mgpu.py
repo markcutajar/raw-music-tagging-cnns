@@ -157,8 +157,8 @@ def get_logits(model, data_batch, window, mode):
                                  name='MapModels')
         # logits = superpoolB(tf.concat(tf.unstack(logits_array), axis=1, name='mergingLogits'))
         # logits = superpoolB(tf.concat(tf.unstack(logits_array), axis=1, name='mergingLogits'))
-        logits = superpoolC(tf.stack(tf.unstack(logits_array), axis=1, name='mergingLogits'))
-        # logits = superpoolD(tf.stack(tf.unstack(logits_array), axis=-1, name='mergingLogits'))
+        # logits = superpoolC(tf.stack(tf.unstack(logits_array), axis=1, name='mergingLogits'))
+        logits = superpoolD(tf.stack(tf.unstack(logits_array), axis=-1, name='mergingLogits'))
 
     else:
         raise ValueError('Window type {} not recognized'.format(window))
@@ -175,8 +175,6 @@ def general_metrics(predictions, targets_batch):
             predictions, targets_batch, name='true_positives'),
         'true_negatives': tf.contrib.metrics.streaming_true_negatives(
             predictions, targets_batch, name='true_negatives'),
-        #'precision': tf.contrib.metrics.streaming_precision(
-        #    predictions, targets_batch, name='precision'),
         'aucroc': tf.contrib.metrics.streaming_auc(
             predictions, targets_batch, name='aucroc')
     }
@@ -263,31 +261,31 @@ def superpoolB(data):
 
 def superpoolC(data):
     with tf.variable_scope('CL1_SP'):
-        out_CL1 = tf.layers.conv1d(data, 32, 3, strides=1, activation=None, name='conv', data_format='channel_first')
-        out_CL1 = tf.layers.batch_normalization(out_CL1, name='batchNorm', training=True)
-        out_CL1 = tf.nn.elu(out_CL1, name='nonLin')
+        out_CL1_SP = tf.layers.conv1d(data, 32, 3, strides=1, activation=None, name='conv', data_format='channels_first')
+        out_CL1_SP = tf.layers.batch_normalization(out_CL1_SP, name='batchNorm', training=True, axis=1)
+        out_CL1_SP = tf.nn.elu(out_CL1_SP, name='nonLin')
 
-    out_flat = tf.reshape(out_CL1, [int(out_CL1.shape[0]), -1], name='FLTN_SP')
+    out_FLTN_SP = tf.reshape(out_CL1_SP, [int(out_CL1_SP.shape[0]), -1], name='FLTN_SP')
 
-    out_FCL2 = tf.layers.dense(out_flat, 1500, activation=tf.nn.elu, name='FCSL2')
-    out_FCL2 = tf.layers.dropout(out_FCL2, training=True)
+    out_FCL2_SP = tf.layers.dense(out_FLTN_SP, 1500, activation=tf.nn.elu, name='FCSL2')
+    out_FCL2_SP = tf.layers.dropout(out_FCL2_SP, training=True)
 
-    output_final = tf.layers.dense(out_FCL2, 50, activation=tf.identity, name='FCSL3')
+    output_final = tf.layers.dense(out_FCL2_SP, 50, activation=tf.identity, name='FCSL3')
     return output_final
 
 
 def superpoolD(data):
     with tf.variable_scope('CL1_SP'):
-        out_CL1 = tf.layers.conv1d(data, 50, 3, strides=1, activation=None, name='conv', data_format='channel_first')
-        out_CL1 = tf.layers.batch_normalization(out_CL1, name='batchNorm', training=True)
-        out_CL1 = tf.nn.elu(out_CL1, name='nonLin')
+        out_CL1_SP = tf.layers.conv1d(data, 50, 3, strides=1, activation=None, name='conv', data_format='channels_first')
+        out_CL1_SP = tf.layers.batch_normalization(out_CL1_SP, name='batchNorm', training=True, axis=1)
+        out_CL1_SP = tf.nn.elu(out_CL1_SP, name='nonLin')
 
-    out_flat = tf.reshape(out_CL1, [int(out_CL1.shape[0]), -1], name='FLTN_SP')
+    out_FLTN_SP = tf.reshape(out_CL1_SP, [int(out_CL1_SP.shape[0]), -1], name='FLTN_SP')
 
-    out_FCL2 = tf.layers.dense(out_flat, 500, activation=tf.nn.elu, name='FCSL2')
-    out_FCL2 = tf.layers.dropout(out_FCL2, training=True)
+    out_FCL2_SP = tf.layers.dense(out_FLTN_SP, 500, activation=tf.nn.elu, name='FCSL2')
+    out_FCL2_SP = tf.layers.dropout(out_FCL2_SP, training=True)
 
-    output_final = tf.layers.dense(out_FCL2, 50, activation=tf.identity, name='FCSL3')
+    output_final = tf.layers.dense(out_FCL2_SP, 50, activation=tf.identity, name='FCSL3')
     return output_final
 
 
@@ -570,42 +568,42 @@ def ds256ra(data_batch, mode):
 
     name = 'CL1'
     with tf.variable_scope(name):
-        output = tf.layers.conv1d(data_batch,
-                                  filt_depth,
-                                  filt_length,
-                                  strides=stride_length,
-                                  activation=None,
-                                  name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
+        out_CL1 = tf.layers.conv1d(data_batch,
+                                   filt_depth,
+                                   filt_length,
+                                   strides=stride_length,
+                                   activation=None,
+                                   name='conv')
+        out_CL1 = tf.layers.batch_normalization(out_CL1, name='batchNorm', training=True)
+        out_CL1 = tf.nn.elu(out_CL1, name='nonLin')
 
     name = 'CL2'
     with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['CL1'], 32, 8, strides=1, activation=None, name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
+        out_CL2 = tf.layers.conv1d(out_CL1, 32, 8, strides=1, activation=None, name='conv')
+        out_CL2 = tf.layers.batch_normalization(out_CL2, name='batchNorm', training=True)
+        out_CL2 = tf.nn.elu(out_CL2, name='nonLin')
 
     name = 'MP1'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=4, strides=4, name=name)
+    out_MP1 = tf.layers.max_pooling1d(out_CL2, pool_size=4, strides=4, name=name)
 
     name = 'CL3'
     with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP1'], 32, 8, strides=1, activation=None, name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
+        out_CL3 = tf.layers.conv1d(out_MP1, 32, 8, strides=1, activation=None, name='conv')
+        out_CL3 = tf.layers.batch_normalization(out_CL3, name='batchNorm', training=True)
+        out_CL3 = tf.nn.elu(out_CL3, name='nonLin')
 
     name = 'MP2'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=4, strides=4, name=name)
+    out_MP2 = tf.layers.max_pooling1d(out_CL3, pool_size=4, strides=4, name=name)
 
     name = 'FLTN'
-    outputs[name] = tf.reshape(outputs['MP2'], [int(outputs['MP2'].shape[0]), -1], name=name)
+    out_FLTN = tf.reshape(out_MP2, [int(out_MP2.shape[0]), -1], name=name)
 
     name = 'FCL1'
-    outputs[name] = tf.layers.dense(outputs['FLTN'], 1000, activation=tf.nn.elu, name=name)
+    out_FCL1 = tf.layers.dense(out_FLTN, 1000, activation=tf.nn.elu, name=name)
 
     name = 'FCL2'
-    outputs[name] = tf.layers.dense(outputs['FCL1'], output_size, activation=tf.identity, name=name)
-    return outputs[name]
+    out_FCL2 = tf.layers.dense(out_FCL1, output_size, activation=tf.identity, name=name)
+    return out_FCL2
 
 
 # Model proposed by Dieleman et al. using FBanks data
