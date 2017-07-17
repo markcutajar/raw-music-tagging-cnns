@@ -263,6 +263,7 @@ def run(target,
             else:
                 features, labels = eval_data.windows_batch_in()
 
+            if is_chief: tf.logging.info('size of eval inputs: {}'.format(features.shape))
             # Model for evaluation
             metrics = models.controller(
                 model_function,
@@ -286,8 +287,7 @@ def run(target,
         hooks = []
 
     # Create a new graph and specify that as default
-    training_graph = tf.Graph()
-    with training_graph.as_default():
+    with tf.Graph().as_default():
 
         with tf.device(tf.train.replica_device_setter()):  # cluster=cluster)):
             # Training data provider
@@ -307,7 +307,7 @@ def run(target,
                 features, labels = train_data.batch_in()
             else:
                 features, labels = train_data.windows_batch_in()
-
+            if is_chief:  tf.logging.info('size of train inputs: {}'.format(features.shape))
             # Model for training
             [train_op, global_step_tensor, train_error] = models.controller(
                 model_function,
@@ -328,7 +328,7 @@ def run(target,
 
         # File writer for metadata of master:replica
         if is_chief:
-            meta_writer = tf.summary.FileWriter(os.path.join(job_dir, 'train'), graph=training_graph)
+            meta_writer = tf.summary.FileWriter(os.path.join(job_dir, 'train'), graph=tf.get_default_graph())
 
         # Creates a MonitoredSession for training
         # MonitoredSession is a Session-like object that handles
@@ -340,7 +340,7 @@ def run(target,
                                                hooks=hooks,
                                                save_checkpoint_secs=TRAIN_CHECKPOINT,
                                                save_summaries_steps=TRAIN_SUMMARIES,
-                                               config=tf.ConfigProto(gpu_options=gpu_options)) as session:
+                                               config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement = True)) as session:
             # Command for logging variable and ops device placement: log_device_placement = True
 
             # Tuple of exceptions that should cause a clean stop of the coordinator
