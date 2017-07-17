@@ -4,6 +4,9 @@ import tensorflow as tf
 
 TRAIN, EVAL, PREDICT = 'TRAIN', 'EVAL', 'PREDICT'
 STME, SPM = 'STME', 'SPM'
+
+TRUE_POSITIVE_FACTOR=10
+TAG_BALANCING_FACTOR=0
 # ---------------------------------------------------------------------------------------------------------------------
 # Controller
 # ---------------------------------------------------------------------------------------------------------------------
@@ -11,14 +14,123 @@ STME, SPM = 'STME', 'SPM'
 
 def controller(function_name,
                mode,
-               data_batch,
-               targets_batch,
+               data_super_batch,
+               targets_super_batch,
+               gpus,
                learning_rate=0.001,
                window=None):
 
-    # Load model
+    optimizer = tf.train.AdadeltaOptimizer(learning_rate)
+    global_step = tf.contrib.framework.get_or_create_global_step()
     model = globals()[function_name]
 
+    # Gradients array for different towers having
+    # the different GPUs.
+    tower_grads = []
+    tower_losses = []
+    tower_predictions = []
+    with tf.variable_scope(tf.get_variable_scope()):
+        for GPU_IDX, GPU in enumerate(gpus):
+
+            data_batch = data_super_batch[GPU_IDX]
+            targets_batch = targets_super_batch[GPU_IDX]
+
+            with tf.device(GPU):
+                with tf.name_scope(GPU.replace('/', '').replace(':', '_')) as scope:
+                    logits = get_logits(model, data_batch, window, mode)
+
+                    with tf.name_scope('tower_loss'):
+                        class_weights = balancing_weights(50, 'log', TAG_BALANCING_FACTOR)
+                        loss = weighted_sigmoid_cross_entropy(logits=logits,
+                                                              labels=targets_batch,
+                                                              false_negatives_weight=TRUE_POSITIVE_FACTOR,
+                                                              balancing_weights_vector=class_weights)
+                        tower_losses.append(loss)
+
+                    tf.get_variable_scope().reuse_variables()
+                    # Retain the summaries from the final tower.
+                    summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+
+                    if mode in TRAIN:
+                        with tf.name_scope('tower_gradients'):
+                            gradients = optimizer.compute_gradients(loss)
+                        tower_grads.append(gradients)
+
+                    elif mode in EVAL:
+                        # Get tag predictions
+                        with tf.name_scope('tower_predictions'):
+                            prediction_values = tf.nn.sigmoid(logits, name='probs')
+                            tower_predictions.append(tf.round(prediction_values))
+
+    # Get merged loss
+    with tf.name_scope('loss'):
+        losses = tf.stack(values=tower_losses)
+        merged_loss = tf.reduce_mean(losses)
+        tf.losses.add_loss(merged_loss)
+
+    # Compute train_op if training
+    if mode in TRAIN:
+        with tf.name_scope('train'):
+            all_gradients = average_gradients(tower_grads)
+            train_op = optimizer.apply_gradients(all_gradients, global_step=global_step)
+
+        # Add histograms for gradients.
+        for grad, var in all_gradients:
+            if grad is not None:
+                summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
+
+        # Add histograms for trainable variables.
+        for var in tf.trainable_variables():
+            summaries.append(tf.summary.histogram(var.op.name, var))
+
+        # Add merged error_loss
+        summaries.append(tf.summary.scalar('training_error', merged_loss))
+        return train_op, global_step
+
+    elif mode in EVAL:
+        # Get tag predictions
+        with tf.name_scope('predictions'):
+            predictions = tf.concat(tower_predictions, axis=0)
+            targets = tf.concat(targets_super_batch, axis=0)
+
+        with tf.name_scope('metrics'):
+            return {
+                'stream': general_metrics(predictions, targets),
+                'scalar': {'evaluation_error': merged_loss},
+                'perclass': perclass_metrics(predictions, targets)
+            }
+    else:
+        raise ValueError('Mode {} not found'.format(mode))
+
+
+def average_gradients(tower_grads):
+
+    average_grads = []
+    for grad_and_vars in zip(*tower_grads):
+        # Note that each grad_and_vars looks like the following:
+        #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
+        grads = []
+        for g, _ in grad_and_vars:
+            # Add 0 dimension to the gradients to represent the tower.
+            expanded_g = tf.expand_dims(g, 0)
+
+            # Append on a 'tower' dimension which we will average over below.
+            grads.append(expanded_g)
+
+        # Average over the 'tower' dimension.
+        grad = tf.concat(axis=0, values=grads)
+        grad = tf.reduce_mean(grad, 0)
+
+        # Keep in mind that the Variables are redundant because they are shared
+        # across towers. So .. we will just return the first tower's pointer to
+        # the Variable.
+        v = grad_and_vars[0][1]
+        grad_and_var = (grad, v)
+        average_grads.append(grad_and_var)
+    return average_grads
+
+
+def get_logits(model, data_batch, window, mode):
     if window is None:
         # normal model
         logits = model(data_batch, mode)
@@ -30,13 +142,8 @@ def controller(function_name,
         logits_array = tf.map_fn(lambda w: model(w, mode),
                                  elems=data_batch,
                                  back_prop=True,
-                                 parallel_iterations=1,
+                                 parallel_iterations=6,
                                  name='MapModels')
-
-        # Concat is extra and essentially not needed as logits array
-        # is outputted as (windows, batch_size, targets) (12, 20, 50)
-        # That is why the reduce mean on the axis=0 would result in
-        # a tensor of (20, 50)
         logits = tf.concat(logits_array, axis=0, name='windowLogits')
         logits = tf.reduce_mean(logits, axis=0, name='averageLogits')
     elif window in SPM:
@@ -45,73 +152,34 @@ def controller(function_name,
         logits_array = tf.map_fn(lambda w: model(w, mode),
                                  elems=data_batch,
                                  back_prop=True,
-                                 parallel_iterations=1,
+                                 parallel_iterations=6,
+                                 swap_memory=True,
                                  name='MapModels')
+        # logits = superpoolB(tf.concat(tf.unstack(logits_array), axis=1, name='mergingLogits'))
+        # logits = superpoolB(tf.concat(tf.unstack(logits_array), axis=1, name='mergingLogits'))
+        logits = superpoolC(tf.stack(tf.unstack(logits_array), axis=1, name='mergingLogits'))
+        # logits = superpoolD(tf.stack(tf.unstack(logits_array), axis=-1, name='mergingLogits'))
 
-        # Use super pooling model
-        # Output of map_fn is (12, 20, 50), we need to reshape this to (20, 50*12)
-        logits = superpoolA(tf.concat(tf.unstack(logits_array), axis=1, name='mergingLogits'))
     else:
         raise ValueError('Window type {} not recognized'.format(window))
+    return logits
 
 
-    # Get tag predictions
-    with tf.name_scope('predictions'):
-        prediction_values = tf.nn.sigmoid(logits, name='probs')
-        predictions = tf.round(prediction_values)
-
-    # Get errors and accuracies
-    if mode in (TRAIN, EVAL):
-        global_step = tf.contrib.framework.get_or_create_global_step()
-        name = 'error'
-        with tf.name_scope(name):
-            # error = tf.losses.sigmoid_cross_entropy(
-            #     multi_class_labels=targets_batch, logits=logits, weights=tf.constant(3))
-            class_weights = balancing_weights(50, 'log', 0)
-            error = weighted_sigmoid_cross_entropy(logits=logits,
-                                                   labels=targets_batch,
-                                                   false_negatives_weight=10,
-                                                   balancing_weights_vector=class_weights)
-            tf.losses.add_loss(error)
-
-        if mode in TRAIN:
-            with tf.name_scope('train'):
-                #train_step = tf.train.AdamOptimizer(learning_rate).minimize(error, global_step=global_step)
-                train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(error, global_step=global_step)
-            return train_step, global_step, error
-        else:
-            with tf.name_scope('metrics'):
-                streaming_metrics = {
-                    'false_negatives': tf.contrib.metrics.streaming_false_negatives(
-                        predictions, targets_batch, name='false_negatives'),
-                    'false_positives': tf.contrib.metrics.streaming_false_positives(
-                        predictions, targets_batch, name='false_positives'),
-                    'true_positives': tf.contrib.metrics.streaming_true_positives(
-                        predictions, targets_batch, name='true_positives'),
-                    'true_negatives': tf.contrib.metrics.streaming_true_negatives(
-                        predictions, targets_batch, name='true_negatives'),
-                    'precision': tf.contrib.metrics.streaming_precision(
-                        predictions, targets_batch, name='precision'),
-                    'aucroc': tf.contrib.metrics.streaming_auc(
-                        predictions, targets_batch, name='aucroc'),
-                    #'aucpr': tf.contrib.metrics.streaming_auc(
-                    #    predictions, targets_batch, curve='PR', name='aucpr')
-                }
-                scalar_metrics = {
-                    'evaluation_error': error
-                }
-
-                metrics = {
-                    'stream': streaming_metrics,
-                    'scalar': scalar_metrics,
-                    'perclass': perclass_metrics(predictions, targets_batch)
-                }
-            return metrics
-
-    elif mode in PREDICT:
-        return predictions, prediction_values
-    else:
-        raise ValueError('Mode not found!')
+def general_metrics(predictions, targets_batch):
+    return {
+        'false_negatives': tf.contrib.metrics.streaming_false_negatives(
+            predictions, targets_batch, name='false_negatives'),
+        'false_positives': tf.contrib.metrics.streaming_false_positives(
+            predictions, targets_batch, name='false_positives'),
+        'true_positives': tf.contrib.metrics.streaming_true_positives(
+            predictions, targets_batch, name='true_positives'),
+        'true_negatives': tf.contrib.metrics.streaming_true_negatives(
+            predictions, targets_batch, name='true_negatives'),
+        #'precision': tf.contrib.metrics.streaming_precision(
+        #    predictions, targets_batch, name='precision'),
+        'aucroc': tf.contrib.metrics.streaming_auc(
+            predictions, targets_batch, name='aucroc')
+    }
 
 
 def perclass_metrics(predictions, targets_batch):
@@ -133,14 +201,10 @@ def perclass_metrics(predictions, targets_batch):
         perclass_dict[str(idx) + '_true_negatives'] = tf.contrib.metrics.streaming_true_negatives(
             pred_tag, targets_per_tag_list[idx], name='true_negatives')
 
-        perclass_dict[str(idx)+'_precision'] = tf.contrib.metrics.streaming_precision(
-            pred_tag, targets_per_tag_list[idx], name='precision')
 
         perclass_dict[str(idx)+'_aucroc'] = tf.contrib.metrics.streaming_auc(
             pred_tag, targets_per_tag_list[idx], name='aucroc')
 
-        #perclass_dict[str(idx)+'_aucpr'] = tf.contrib.metrics.streaming_auc(
-        #    pred_tag, targets_per_tag_list[idx], curve='PR', name='aucpr')
     return perclass_dict
 
 
@@ -180,6 +244,53 @@ def superpoolA(data):
     name = 'FCSL3'
     superpool_outputs[name] = tf.layers.dense(superpool_outputs['FCSL2'], 50, activation=tf.identity, name=name)
     return superpool_outputs[name]
+
+
+def superpoolB(data):
+    superpool_outputs = {}
+    name = 'FCSL1'
+    output = tf.layers.dense(data, 600, activation=tf.nn.elu, name=name)
+    superpool_outputs[name] = tf.layers.dropout(output, training=True)
+
+    name = 'FCSL2'
+    output = tf.layers.dense(superpool_outputs['FCSL1'], 600, activation=tf.nn.elu, name=name)
+    superpool_outputs[name] = tf.layers.dropout(output, training=True)
+
+    name = 'FCSL3'
+    superpool_outputs[name] = tf.layers.dense(superpool_outputs['FCSL2'], 50, activation=tf.identity, name=name)
+    return superpool_outputs[name]
+
+
+def superpoolC(data):
+    with tf.variable_scope('CL1'):
+        out_CL1 = tf.layers.conv1d(data, 32, 3, strides=1, activation=None, name='conv', data_format='channel_first')
+        out_CL1 = tf.layers.batch_normalization(out_CL1, name='batchNorm', training=True)
+        out_CL1 = tf.nn.elu(out_CL1, name='nonLin')
+
+    out_flat = tf.reshape(out_CL1, [int(out_CL1.shape[0]), -1], name='FLTN_SP')
+
+    out_FCL2 = tf.layers.dense(out_flat, 1500, activation=tf.nn.elu, name='FCL2')
+    out_FCL2 = tf.layers.dropout(out_FCL2, training=True)
+
+    output_final = tf.layers.dense(out_FCL2, 50, activation=tf.identity, name='FCSL3')
+    return output_final
+
+
+def superpoolD(data):
+    with tf.variable_scope('CL1'):
+        out_CL1 = tf.layers.conv1d(data, 50, 3, strides=1, activation=None, name='conv', data_format='channel_first')
+        out_CL1 = tf.layers.batch_normalization(out_CL1, name='batchNorm', training=True)
+        out_CL1 = tf.nn.elu(out_CL1, name='nonLin')
+
+    out_flat = tf.reshape(out_CL1, [int(out_CL1.shape[0]), -1], name='FLTN_SP')
+
+    out_FCL2 = tf.layers.dense(out_flat, 500, activation=tf.nn.elu, name='FCL2')
+    out_FCL2 = tf.layers.dropout(out_FCL2, training=True)
+
+    output_final = tf.layers.dense(out_FCL2, 50, activation=tf.identity, name='FCSL3')
+    return output_final
+
+
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Models
@@ -251,56 +362,147 @@ def chrw(data_batch, mode):
     outputs = {}
     name = 'CL1'
     with tf.variable_scope(name):
-        output = tf.layers.conv1d(data_batch, 128, 3, strides=3, activation=None,  name='conv')  # 38832 -> 12944 128
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
+        tf.logging.info('1: {}'.format(data_batch.shape))
+        output = tf.layers.conv1d(data_batch, 128, 3, strides=3, activation=None, name='conv')      # 38832 -> 12944 128
+        output = tf.layers.batch_normalization(output, name='batchNorm')
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
+    tf.logging.info('2: {}'.format(outputs[name].shape))
     name = 'MP1'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL1'], pool_size=4, strides=4, name=name)  # 12944 -> 3236
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL1'], pool_size=4, strides=4, name=name)           # 12944 -> 3236
 
+    tf.logging.info('3: {}'.format(outputs[name].shape))
     name = 'CL2'
     with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP1'], 256, 3, strides=1, activation=None, name='conv')  # 3236 -> 3234 128
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
+        output = tf.layers.conv1d(outputs['MP1'], 256, 3, strides=1, activation=None, name='conv')    # 3236 -> 3234 128
+        output = tf.layers.batch_normalization(output, name='batchNorm')
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
+    tf.logging.info('4: {}'.format(outputs[name].shape))
     name = 'MP2'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=6, strides=6, name=name)  # 3234 -> 539
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=6, strides=6, name=name)             # 3234 -> 539
 
+    tf.logging.info('5: {}'.format(outputs[name].shape))
     name = 'CL3'
     with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP2'], 256, 3, strides=1, activation=None, name='conv')  # 539 -> 537
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
+        output = tf.layers.conv1d(outputs['MP2'], 256, 3, strides=1, activation=None,  name='conv')         # 539 -> 537
+        output = tf.layers.batch_normalization(output, name='batchNorm')
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
+    tf.logging.info('6: {}'.format(outputs[name].shape))
     name = 'MP3'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=3, strides=3, name=name)  # 537 -> 179
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=3, strides=3, name=name)              # 537 -> 179
 
+    tf.logging.info('7: {}'.format(outputs[name].shape))
     name = 'CL4'
     with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP3'], 512, 3, strides=1, activation=None, name='conv')  # 179 -> 177
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
+        output = tf.layers.conv1d(outputs['MP3'], 512, 3, strides=1, activation=None, name='conv')          # 179 -> 177
+        output = tf.layers.batch_normalization(output, name='batchNorm')
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
+    tf.logging.info('8: {}'.format(outputs[name].shape))
     name = 'MP4'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL4'], pool_size=11, strides=11, name=name)  # 177 -> 16
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL4'], pool_size=11, strides=11, name=name)             # 177 -> 16
 
+    tf.logging.info('9: {}'.format(outputs[name].shape))
     name = 'CL5'
     with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP4'], 1024, 3, strides=1, activation=None, name='conv')  # 16 -> 14
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
+        output = tf.layers.conv1d(outputs['MP4'], 1024, 3, strides=1, activation=None, name='conv')           # 16 -> 14
+        output = tf.layers.batch_normalization(output, name='batchNorm')
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
+    tf.logging.info('10: {}'.format(outputs[name].shape))
     name = 'MP5'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL5'], pool_size=14, strides=14, name=name)  # 14 -> 1
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL5'], pool_size=14, strides=14, name=name)               # 14 -> 1
 
+    tf.logging.info('11: {}'.format(outputs[name].shape))
     name = 'FLTN'
     outputs[name] = tf.reshape(outputs['MP5'], [int(outputs['MP5'].shape[0]), -1], name=name)
 
+    tf.logging.info('12: {}'.format(outputs[name].shape))
     name = 'FCL1'
     outputs[name] = tf.layers.dense(outputs['FLTN'], output_size, activation=tf.identity, name=name)
     return outputs[name]
 
+
+# Model proposed by Choi et al. using windowed Raw data
+"""def chrw(data_batch, mode):
+    output_size=50
+    outputs = {}
+    name = 'CL1'
+    with tf.variable_scope(name):
+        tf.logging.info('1: {}'.format(data_batch.shape))
+        output = tf.layers.conv1d(data_batch, 128, 3, strides=3, activation=None,
+                                  name='conv', data_format='channels_first')                        # 38832 -> 12944 128
+        output = tf.layers.batch_normalization(output, name='batchNorm', axis=1)
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    tf.logging.info('2: {}'.format(outputs[name].shape))
+    name = 'MP1'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL1'], pool_size=4, strides=4,
+                                            name=name, data_format='channels_first')                     # 12944 -> 3236
+
+    tf.logging.info('3: {}'.format(outputs[name].shape))
+    name = 'CL2'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(outputs['MP1'], 256, 3, strides=1, activation=None,
+                                  name='conv', data_format='channels_first')                          # 3236 -> 3234 128
+        output = tf.layers.batch_normalization(output, name='batchNorm', axis=1)
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    tf.logging.info('4: {}'.format(outputs[name].shape))
+    name = 'MP2'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=6, strides=6,
+                                            name=name, data_format='channels_first')                       # 3234 -> 539
+
+    tf.logging.info('5: {}'.format(outputs[name].shape))
+    name = 'CL3'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(outputs['MP2'], 256, 3, strides=1, activation=None,
+                                  name='conv', data_format='channels_first')                                # 539 -> 537
+        output = tf.layers.batch_normalization(output, name='batchNorm', axis=1)
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    tf.logging.info('6: {}'.format(outputs[name].shape))
+    name = 'MP3'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=3, strides=3,
+                                            name=name, data_format='channels_first')                        # 537 -> 179
+
+    tf.logging.info('7: {}'.format(outputs[name].shape))
+    name = 'CL4'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(outputs['MP3'], 512, 3, strides=1, activation=None,
+                                  name='conv', data_format='channels_first')                                # 179 -> 177
+        output = tf.layers.batch_normalization(output, name='batchNorm', axis=1)
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    tf.logging.info('8: {}'.format(outputs[name].shape))
+    name = 'MP4'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL4'], pool_size=11, strides=11,
+                                            name=name, data_format='channels_first')                         # 177 -> 16
+
+    tf.logging.info('9: {}'.format(outputs[name].shape))
+    name = 'CL5'
+    with tf.variable_scope(name):
+        output = tf.layers.conv1d(outputs['MP4'], 1024, 3, strides=1, activation=None,
+                                  name='conv', data_format='channels_first')                                  # 16 -> 14
+        output = tf.layers.batch_normalization(output, name='batchNorm', axis=1)
+        outputs[name] = tf.nn.elu(output, name='nonLin')
+
+    tf.logging.info('10: {}'.format(outputs[name].shape))
+    name = 'MP5'
+    outputs[name] = tf.layers.max_pooling1d(outputs['CL5'], pool_size=14, strides=14,
+                                            name=name, data_format='channels_first')                            # 14 -> 1
+
+    tf.logging.info('11: {}'.format(outputs[name].shape))
+    name = 'FLTN'
+    outputs[name] = tf.reshape(outputs['MP5'], [int(outputs['MP5'].shape[0]), -1], name=name)
+
+    tf.logging.info('12: {}'.format(outputs[name].shape))
+    name = 'FCL1'
+    outputs[name] = tf.layers.dense(outputs['FLTN'], output_size, activation=tf.identity, name=name)
+    return outputs[name]
+"""
 
 # Model proposed by Choi et al. using clipped Raw data
 def chrc(data_batch, mode):
@@ -374,13 +576,13 @@ def ds256ra(data_batch, mode):
                                   strides=stride_length,
                                   activation=None,
                                   name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)  #(mode==TRAIN))
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'CL2'
     with tf.variable_scope(name):
         output = tf.layers.conv1d(outputs['CL1'], 32, 8, strides=1, activation=None, name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)  #(mode==TRAIN))
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'MP1'
@@ -389,7 +591,7 @@ def ds256ra(data_batch, mode):
     name = 'CL3'
     with tf.variable_scope(name):
         output = tf.layers.conv1d(outputs['MP1'], 32, 8, strides=1, activation=None, name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)  #(mode==TRAIN))
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'MP2'
@@ -415,7 +617,7 @@ def ds256fa(data_batch, mode):
     name = 'CL1'
     with tf.variable_scope(name):
         output = tf.layers.conv2d(data_batch, 32, (8, 1), strides=(1, 1), activation=None,  name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)#(mode==TRAIN))
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'MP1'
@@ -424,7 +626,7 @@ def ds256fa(data_batch, mode):
     name = 'CL2'
     with tf.variable_scope(name):
         output = tf.layers.conv2d(outputs['MP1'], 32, (8, 1), strides=(1, 1), activation=None, name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)#(mode==TRAIN))
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'MP2'
@@ -440,6 +642,9 @@ def ds256fa(data_batch, mode):
     outputs[name] = tf.layers.dense(outputs['FCL1'], output_size, activation=tf.identity, name=name)
     return outputs[name]
 
+# ---------------------------------------------------------------------------------------------------------------------
+# Basic Models
+# ---------------------------------------------------------------------------------------------------------------------
 
 # Basic MLP for quick testing
 def basic(data_batch, mode):
@@ -630,246 +835,3 @@ def mkc_f(data_batch, mode):
 # ---------------------------------------------------------------------------------------------------------------------
 # In Development
 # ---------------------------------------------------------------------------------------------------------------------
-
-
-def ds256ra_t3(data_batch):
-    FL = 256
-    FD = 1
-    SL = 256
-    OZ = 3
-    outputs = {}
-    names = []
-    name = 'strided-conv'
-    names.append(name)
-    with tf.name_scope(name):
-        output = tf.layers.conv1d(data_batch, FD, FL, strides=SL, activation=None, name=name)
-        output=tf.layers.batch_normalization(output, name=name + 'bn')
-        outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'conv-1'
-    names.append(name)
-    with tf.name_scope(name):
-        output = tf.layers.conv1d(outputs['strided-conv'], 32, 8, strides=1, activation=None, name=name)
-        output=tf.layers.batch_normalization(output, name=name + 'bn')
-        outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'maxp-1'
-    names.append(name)
-    with tf.name_scope(name):
-        outputs[name] = tf.layers.max_pooling1d(outputs['conv-1'], pool_size=4, strides=4, name=name)
-
-    name = 'conv-2'
-    names.append(name)
-    with tf.name_scope(name):
-        output = tf.layers.conv1d(outputs['maxp-1'], 32, 8, strides=1, activation=None, name=name)
-        output=tf.layers.batch_normalization(output, name=name + 'bn')
-        outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'maxp-2'
-    names.append(name)
-    with tf.name_scope(name):
-        outputs[name] = tf.layers.max_pooling1d(outputs['conv-2'], pool_size=4, strides=4, name=name)
-
-    name = 'flatten'
-    names.append(name)
-    with tf.name_scope(name):
-        outputs[name] = tf.reshape(outputs['maxp-2'], [int(outputs['maxp-2'].shape[0]), -1])
-
-    name = 'fcl-1'
-    names.append(name)
-    with tf.name_scope(name):
-        outputs[name] = tf.layers.dense(outputs['flatten'], 100, activation=tf.nn.elu, name=name)
-
-    name = 'fcl-2'
-    names.append(name)
-    with tf.name_scope(name):
-        outputs[name] = tf.layers.dense(outputs['fcl-1'], OZ, activation=tf.identity, name=name)
-    return outputs[name]
-
-
-def ds256rc(data_batch):
-    FL = 16
-    FD = 16
-    SL = 16
-    OZ = 50
-    outputs = {}
-    names = []
-    name = 'strided-conv'
-    names.append(name)
-    output = tf.layers.conv1d(data_batch, FD, FL, strides=SL, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'conv-1'
-    names.append(name)
-    output = tf.layers.conv1d(outputs['strided-conv'], 32, 8, strides=1, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'maxp-1'
-    names.append(name)
-    outputs[name] = tf.layers.max_pooling1d(outputs['conv-1'], pool_size=4, strides=4, name=name)
-
-    name = 'conv-2'
-    names.append(name)
-    output = tf.layers.conv1d(outputs['maxp-1'], 32, 8, strides=1, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'maxp-2'
-    names.append(name)
-    outputs[name] = tf.layers.max_pooling1d(outputs['conv-2'], pool_size=4, strides=4, name=name)
-
-    name = 'flatten'
-    names.append(name)
-    outputs[name] = tf.reshape(outputs['maxp-2'], [int(outputs['maxp-2'].shape[0]), -1])
-
-    name = 'fcl-1'
-    names.append(name)
-    outputs[name] = tf.layers.dense(outputs['flatten'], 100, activation=tf.nn.elu, name=name)
-
-    name = 'fcl-2'
-    names.append(name)
-    outputs[name] = tf.layers.dense(outputs['fcl-1'], OZ, activation=tf.identity, name=name)
-    return outputs[name]
-
-
-def ds256rd(data_batch):
-    FL = 256
-    FD = 16
-    SL = 16
-    OZ = 50
-    outputs = {}
-    names = []
-    name = 'strided-conv'
-    names.append(name)
-    output = tf.layers.conv1d(data_batch, FD, FL, strides=SL, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'conv-1'
-    names.append(name)
-    output = tf.layers.conv1d(outputs['strided-conv'], 32, 8, strides=1, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'maxp-1'
-    names.append(name)
-    outputs[name] = tf.layers.max_pooling1d(outputs['conv-1'], pool_size=4, strides=4, name=name)
-
-    name = 'conv-2'
-    names.append(name)
-    output = tf.layers.conv1d(outputs['maxp-1'], 32, 8, strides=1, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'maxp-2'
-    names.append(name)
-    outputs[name] = tf.layers.max_pooling1d(outputs['conv-2'], pool_size=4, strides=4, name=name)
-
-    name = 'flatten'
-    names.append(name)
-    outputs[name] = tf.reshape(outputs['maxp-2'], [int(outputs['maxp-2'].shape[0]), -1])
-
-    name = 'fcl-1'
-    names.append(name)
-    outputs[name] = tf.layers.dense(outputs['flatten'], 100, activation=tf.nn.elu, name=name)
-
-    name = 'fcl-2'
-    names.append(name)
-    outputs[name] = tf.layers.dense(outputs['fcl-1'], OZ, activation=tf.identity, name=name)
-    return outputs[name]
-
-
-def ds256re(data_batch):
-    FL = 16
-    FD = 16
-    SL = 1
-    OZ = 50
-    outputs = {}
-    names = []
-    name = 'strided-conv'
-    names.append(name)
-    output = tf.layers.conv1d(data_batch, FD, FL, strides=SL, dilation_rate=2, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'conv-1'
-    names.append(name)
-    output = tf.layers.conv1d(outputs['strided-conv'], 32, 8, strides=1, dilation_rate=2, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'maxp-1'
-    names.append(name)
-    outputs[name] = tf.layers.max_pooling1d(outputs['conv-1'], pool_size=4, strides=4, name=name)
-
-    name = 'conv-2'
-    names.append(name)
-    output = tf.layers.conv1d(outputs['maxp-1'], 32, 8, strides=1, dilation_rate=2, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'maxp-2'
-    names.append(name)
-    outputs[name] = tf.layers.max_pooling1d(outputs['conv-2'], pool_size=4, strides=4, name=name)
-
-    name = 'flatten'
-    names.append(name)
-    outputs[name] = tf.reshape(outputs['maxp-2'], [int(outputs['maxp-2'].shape[0]), -1])
-
-    name = 'fcl-1'
-    names.append(name)
-    outputs[name] = tf.layers.dense(outputs['flatten'], 100, activation=tf.nn.elu, name=name)
-
-    name = 'fcl-2'
-    names.append(name)
-    outputs[name] = tf.layers.dense(outputs['fcl-1'], OZ, activation=tf.identity, name=name)
-    return outputs[name]
-
-
-def ds256rf(data_batch):
-    FL = 16
-    FD = 16
-    SL = 1
-    OZ = 50
-    outputs = {}
-    names = []
-    name = 'strided-conv'
-    names.append(name)
-    output = tf.layers.conv1d(data_batch, FD, FL, strides=SL, dilation_rate=4, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'conv-1'
-    names.append(name)
-    output = tf.layers.conv1d(outputs['strided-conv'], 32, 8, strides=1, dilation_rate=4, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'maxp-1'
-    names.append(name)
-    outputs[name] = tf.layers.max_pooling1d(outputs['conv-1'], pool_size=4, strides=4, name=name)
-
-    name = 'conv-2'
-    names.append(name)
-    output = tf.layers.conv1d(outputs['maxp-1'], 32, 8, strides=1, dilation_rate=4, activation=None, name=name)
-    output = tf.layers.batch_normalization(output, name=name + 'bn')
-    outputs[name] = tf.nn.elu(output, name=name + 'act')
-
-    name = 'maxp-2'
-    names.append(name)
-    outputs[name] = tf.layers.max_pooling1d(outputs['conv-2'], pool_size=4, strides=4, name=name)
-
-    name = 'flatten'
-    names.append(name)
-    outputs[name] = tf.reshape(outputs['maxp-2'], [int(outputs['maxp-2'].shape[0]), -1])
-
-    name = 'fcl-1'
-    names.append(name)
-    outputs[name] = tf.layers.dense(outputs['flatten'], 100, activation=tf.nn.elu, name=name)
-
-    name = 'fcl-2'
-    names.append(name)
-    outputs[name] = tf.layers.dense(outputs['fcl-1'], OZ, activation=tf.identity, name=name)
-    return outputs[name]
