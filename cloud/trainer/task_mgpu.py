@@ -12,17 +12,27 @@
 import argparse
 import json
 import os
-from . import models as models
+from . import models_mgpu as models
 import threading
 import tensorflow as tf
-from .dataproviders import DataProvider
+from .dataproviders_mgpu import DataProvider
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.logging.set_verbosity(tf.logging.INFO)
 
+GPU_MEMORY_FRACTION=0.9
+EVAL_GPUS = ['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3']
+TRAIN_GPUS = ['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3']
+NUM_EVAL_GPUS = len(EVAL_GPUS)
+NUM_TRAIN_GPUS = len(TRAIN_GPUS)
+
+# Possible GPUS
+# ['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3', '/gpu:4', '/gpu:5', '/gpu:6', '/gpu:7']
+# ['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3']
+
 TRAIN_CHECKPOINT = 60
 TRAIN_SUMMARIES = 60
-CHECKPOINT_PER_EVAL = 4  #2
+CHECKPOINT_PER_EVAL = 10  #2
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -92,8 +102,6 @@ class EvaluationRunHook(tf.train.SessionRunHook):
 
             self._final_ops_dict = [stream_value_dict, perclass_value_dict]
             self._eval_ops = [stream_update_dict.values(), perclass_update_dict.values()]
-            # self._final_ops_dict = stream_value_dict
-            # self._eval_ops = stream_update_dict.values()
 
         # MonitoredTrainingSession runs hooks in background threads
         # and it doesn't wait for the thread from the last session.run()
@@ -138,8 +146,10 @@ class EvaluationRunHook(tf.train.SessionRunHook):
         """Run model evaluation and generate summaries."""
         coord = tf.train.Coordinator(clean_stop_exception_types=(
             tf.errors.CancelledError, tf.errors.OutOfRangeError))
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
-        with tf.Session(graph=self._graph, config=tf.ConfigProto(gpu_options=gpu_options)) as session:
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=GPU_MEMORY_FRACTION)
+        with tf.Session(graph=self._graph, config=tf.ConfigProto(gpu_options=gpu_options,
+                                                                 allow_soft_placement=True)) as session:
+
             # Restores previously saved variables from latest checkpoint
             self._saver.restore(session, self._latest_checkpoint)
 
@@ -242,19 +252,24 @@ def run(target,
     # checkpoints, running evaluation and restoring if a
     # crash happens.
 
+
+# --------------------------------------------------------------------------------------------------
+
+    # Evaluation Two GPUs (6-7)
+    # Data input producer CPU
     if is_chief:
         # Construct evaluation graph
-        # tf.logging.info('Learning Rate: {}'.format(learning_rate))
         evaluation_graph = tf.Graph()
-        with evaluation_graph.as_default():
+        with evaluation_graph.as_default(), tf.device('/cpu:0'):
             # Evaluation data provider
             eval_data = DataProvider(
                 [eval_files],
                 metadata_files,
-                batch_size=eval_batch_size,
+                batch_size=eval_batch_size*NUM_EVAL_GPUS,
                 num_epochs=eval_num_epochs,
                 num_tags=target_size,
-                num_samples=num_song_samples
+                num_samples=num_song_samples,
+                split_nums=NUM_EVAL_GPUS
             )
 
             # Features and label tensors
@@ -263,13 +278,12 @@ def run(target,
             else:
                 features, labels = eval_data.windows_batch_in()
 
-            if is_chief: tf.logging.info('size of eval inputs: {}'.format(features.shape))
-            # Model for evaluation
             metrics = models.controller(
                 model_function,
                 models.EVAL,
                 features,
                 labels,
+                gpus=EVAL_GPUS,
                 learning_rate=learning_rate,
                 window=windowing_type
             )
@@ -287,48 +301,40 @@ def run(target,
         hooks = []
 
     # Create a new graph and specify that as default
-    with tf.Graph().as_default():
+    with tf.Graph().as_default(), tf.device('/cpu:0'):
 
-        with tf.device(tf.train.replica_device_setter()):  # cluster=cluster)):
-            # Training data provider
-            train_data = DataProvider(
-                [train_files],
-                metadata_files,
-                batch_size=train_batch_size,
-                num_epochs=num_epochs,
-                num_tags=target_size,
-                num_samples=num_song_samples
-            )
+        # Training data provider
+        train_data = DataProvider(
+            [train_files],
+            metadata_files,
+            batch_size=train_batch_size*NUM_TRAIN_GPUS,
+            num_epochs=num_epochs,
+            num_tags=target_size,
+            num_samples=num_song_samples,
+            split_nums=NUM_TRAIN_GPUS
+        )
 
-            # Features and label tensors
-            if windowing_type is None:
-                features, labels = train_data.batch_in()
-            elif windowing_type is 'STME':
-                features, labels = train_data.batch_in()
-            else:
-                features, labels = train_data.windows_batch_in()
-            if is_chief:  tf.logging.info('size of train inputs: {}'.format(features.shape))
-            # Model for training
-            [train_op, global_step_tensor, train_error] = models.controller(
-                model_function,
-                models.TRAIN,
-                features,
-                labels,
-                learning_rate=learning_rate,
-                window=windowing_type
-            )
+        # Features and label tensors
+        if windowing_type is None:
+            features, labels = train_data.batch_in()
+        elif windowing_type == 'STME':
+            features, labels = train_data.batch_in()
+        else:
+            features, labels = train_data.windows_batch_in()
 
-        # Summary for training error
-        error_summary = tf.summary.merge([
-            tf.summary.scalar('training_error', train_error)
-        ])
+        # Model for training
+        [train_op, global_step_tensor] = models.controller(
+            model_function,
+            models.TRAIN,
+            features,
+            labels,
+            gpus=TRAIN_GPUS,
+            learning_rate=learning_rate,
+            window=windowing_type
+        )
 
         # GPU option to limit usage of GPU memory per process.
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
-
-        # File writer for metadata of master:replica
-        if is_chief:
-            meta_writer = tf.summary.FileWriter(os.path.join(job_dir, 'train'), graph=tf.get_default_graph())
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=GPU_MEMORY_FRACTION)
 
         # Creates a MonitoredSession for training
         # MonitoredSession is a Session-like object that handles
@@ -340,8 +346,9 @@ def run(target,
                                                hooks=hooks,
                                                save_checkpoint_secs=TRAIN_CHECKPOINT,
                                                save_summaries_steps=TRAIN_SUMMARIES,
-                                               config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement = True)) as session:
-            # Command for logging variable and ops device placement: log_device_placement = True
+                                               config=tf.ConfigProto(gpu_options=gpu_options,
+                                                                     log_device_placement=True,
+                                                                     allow_soft_placement=True)) as session:
 
             # Tuple of exceptions that should cause a clean stop of the coordinator
             coord = tf.train.Coordinator(clean_stop_exception_types=(
@@ -355,22 +362,12 @@ def run(target,
             # distributed setting
             step = global_step_tensor.eval(session=session)
 
-            # Set up run options and metadata
-            run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-            run_metadata = tf.RunMetadata()
-
             # Run the training graph which returns the step number as tracked by
             # the global step tensor.
             # When train epochs is reached, coord.should_stop() will be true.
             with coord.stop_on_exception():
                 while (train_steps is None or step < train_steps) and not coord.should_stop():
-                    step, _, error = session.run([global_step_tensor, train_op, error_summary],
-                                                 options=run_options, run_metadata=run_metadata)
-                    if is_chief:
-                        if step == 10 or step % 2000 == 0:
-                            meta_writer.add_run_metadata(run_metadata,
-                                                         'run_metadata_{}'.format(step),
-                                                         global_step=step)
+                    step, _ = session.run([global_step_tensor, train_op])
 
 
 # ---------------------------------------------------------------------------------------------------------------------
