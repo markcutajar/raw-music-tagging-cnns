@@ -24,7 +24,8 @@ class DataProvider(object):
                  num_epochs=None,
                  num_tags=None,
                  num_samples=None,
-                 shuffle=True):
+                 shuffle=True,
+                 split_nums=None):
 
         """Class to load the data and provide batches to
         the calling function. Every run a batch is returned.
@@ -41,7 +42,7 @@ class DataProvider(object):
         """
         self._batch_size = batch_size
         self._num_tags = num_tags
-
+        self._split_nums = split_nums
         self._num_samples = num_samples
         self._shuffle = shuffle
 
@@ -78,7 +79,8 @@ class DataProvider(object):
 
         # Queuing and output
         features, labels = self.batch(songs, tags)
-        features = self.set_shape(features)
+        features = self.set_shape(features, axis=-1)
+        features, labels = self.split_batch(features, labels)
         return features, labels
 
     def windows_batch_in(self):
@@ -111,7 +113,6 @@ class DataProvider(object):
             songs = tf.reshape(songs, [-1, windows_per_song, self._max_samples, self._sample_depth])
 
         # Gather the tags of the corresponding songs
-        #tags = tf.reshape(self.tag_prep(loaded_tags), [windows_per_song * self._batch_size, self._num_tags])
         tags = self.tag_prep(loaded_tags, self._num_tags+1)
         tags = tf.strided_slice(tags, [0, 0], [-1, -1], [windows_per_song, 1])
 
@@ -121,8 +122,9 @@ class DataProvider(object):
 
         # Queuing and output
         features, labels = self.batch(songs, tags)
-        features = self.set_shape(features)
+        features = self.set_shape(features, axis=-1)
         features = self.transpose_for_mapfn(features)
+        features, labels = self.split_batch(features, labels, feature_axis=1)
         return features, labels
 
     # Load data
@@ -221,6 +223,28 @@ class DataProvider(object):
             features = tf.transpose(songs, perm=[1, 0, 2, 3, 4])
         return features
 
+    # Split if super batch
+    def split_batch(self, songs, tags, feature_axis=0, targets_axis=0):
+        if self._split_nums is not None:
+            with tf.name_scope('SplitBatch'):
+                features = tf.split(songs, self._split_nums, axis=feature_axis)
+                labels = tf.split(tags, self._split_nums, axis=targets_axis)
+        else:
+            features, labels = songs, tags
+        return features, labels
+
+    # Increase dimension at the end for convolution
+    @staticmethod
+    def set_shape(songs, axis=1):
+        """Function to increase axis for convolutions.
+
+        :param songs: Batch to which to increase dimensionality
+        :return: Batch with added last dimension
+        """
+        with tf.name_scope('SetShape'):
+            feats = tf.expand_dims(songs, axis=axis)
+        return feats
+
     # Strip to top 50 tags
     @staticmethod
     def tag_prep(tags, shrink):
@@ -267,14 +291,5 @@ class DataProvider(object):
             norm_song = tf.div(songs, factor)
         return norm_song
 
-    # Increase dimension at the end for convolution
-    @staticmethod
-    def set_shape(songs):
-        """Function to increase axis for convolutions.
 
-        :param songs: Batch to which to increase dimensionality
-        :return: Batch with added last dimension
-        """
-        with tf.name_scope('SetShape'):
-            feats = tf.expand_dims(songs, axis=-1)
-        return feats
+
