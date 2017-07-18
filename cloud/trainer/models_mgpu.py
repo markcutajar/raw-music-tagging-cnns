@@ -157,7 +157,7 @@ def get_logits(model, data_batch, window, mode):
                                  name='MapModels')
         # logits = superpoolB(tf.concat(tf.unstack(logits_array), axis=1, name='mergingLogits'))
         # logits = superpoolB(tf.concat(tf.unstack(logits_array), axis=1, name='mergingLogits'))
-        # logits = superpoolC(tf.stack(tf.unstack(logits_array), axis=1, name='mergingLogits'))
+        #logits = superpoolC(tf.stack(tf.unstack(logits_array), axis=1, name='mergingLogits'))
         logits = superpoolD(tf.stack(tf.unstack(logits_array), axis=-1, name='mergingLogits'))
 
     else:
@@ -294,267 +294,6 @@ def superpoolD(data):
 # Models
 # ---------------------------------------------------------------------------------------------------------------------
 
-
-# Model proposed by Choi et al. using Raw data
-def chra(data_batch, mode):
-    output_size=50
-    outputs = {}
-    name = 'CL1'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(data_batch, 128, 3, strides=1, activation=None,  name='conv', padding='same')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-
-    name = 'MP1'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL1'], pool_size=8, strides=8, name=name)
-
-    name = 'CL2'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP1'], 384, 3, strides=1, activation=None, name='conv', padding='same')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    name = 'MP2'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=12, strides=12, name=name)
-
-    name = 'CL3'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP2'], 768, 3, strides=1, activation=None, name='conv', padding='same')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    name = 'MP3'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=18, strides=18, name=name)
-
-    name = 'CL4'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP3'], 1024, 3, strides=1, activation=None, name='conv', padding='same')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    name = 'MP4'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL4'], pool_size=13, strides=13, name=name)
-
-    name = 'CL5'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP4'], 2048, 3, strides=1, activation=None, name='conv', padding='same')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    name = 'MP5'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL5'], pool_size=20, strides=20, name=name)
-    tf.logging.info(outputs[name].shape)
-
-    name = 'FLTN'
-    outputs[name] = tf.reshape(outputs['MP5'], [int(outputs['MP5'].shape[0]), -1], name=name)
-
-    name = 'FCL1'
-    outputs[name] = tf.layers.dense(outputs['FLTN'], output_size, activation=tf.identity, name=name)
-    return outputs[name]
-
-
-# Model proposed by Choi et al. using windowed Raw data
-def chrw(data_batch, mode):
-    output_size=50
-    outputs = {}
-    name = 'CL1'
-    with tf.variable_scope(name):
-        tf.logging.info('1: {}'.format(data_batch.shape))
-        output = tf.layers.conv1d(data_batch, 128, 3, strides=3, activation=None, name='conv')      # 38832 -> 12944 128
-        output = tf.layers.batch_normalization(output, name='batchNorm')
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    tf.logging.info('2: {}'.format(outputs[name].shape))
-    name = 'MP1'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL1'], pool_size=4, strides=4, name=name)           # 12944 -> 3236
-
-    tf.logging.info('3: {}'.format(outputs[name].shape))
-    name = 'CL2'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP1'], 256, 3, strides=1, activation=None, name='conv')    # 3236 -> 3234 128
-        output = tf.layers.batch_normalization(output, name='batchNorm')
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    tf.logging.info('4: {}'.format(outputs[name].shape))
-    name = 'MP2'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=6, strides=6, name=name)             # 3234 -> 539
-
-    tf.logging.info('5: {}'.format(outputs[name].shape))
-    name = 'CL3'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP2'], 256, 3, strides=1, activation=None,  name='conv')         # 539 -> 537
-        output = tf.layers.batch_normalization(output, name='batchNorm')
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    tf.logging.info('6: {}'.format(outputs[name].shape))
-    name = 'MP3'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=3, strides=3, name=name)              # 537 -> 179
-
-    tf.logging.info('7: {}'.format(outputs[name].shape))
-    name = 'CL4'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP3'], 512, 3, strides=1, activation=None, name='conv')          # 179 -> 177
-        output = tf.layers.batch_normalization(output, name='batchNorm')
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    tf.logging.info('8: {}'.format(outputs[name].shape))
-    name = 'MP4'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL4'], pool_size=11, strides=11, name=name)             # 177 -> 16
-
-    tf.logging.info('9: {}'.format(outputs[name].shape))
-    name = 'CL5'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP4'], 1024, 3, strides=1, activation=None, name='conv')           # 16 -> 14
-        output = tf.layers.batch_normalization(output, name='batchNorm')
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    tf.logging.info('10: {}'.format(outputs[name].shape))
-    name = 'MP5'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL5'], pool_size=14, strides=14, name=name)               # 14 -> 1
-
-    tf.logging.info('11: {}'.format(outputs[name].shape))
-    name = 'FLTN'
-    outputs[name] = tf.reshape(outputs['MP5'], [int(outputs['MP5'].shape[0]), -1], name=name)
-
-    tf.logging.info('12: {}'.format(outputs[name].shape))
-    name = 'FCL1'
-    outputs[name] = tf.layers.dense(outputs['FLTN'], output_size, activation=tf.identity, name=name)
-    return outputs[name]
-
-
-# Model proposed by Choi et al. using windowed Raw data
-"""def chrw(data_batch, mode):
-    output_size=50
-    outputs = {}
-    name = 'CL1'
-    with tf.variable_scope(name):
-        tf.logging.info('1: {}'.format(data_batch.shape))
-        output = tf.layers.conv1d(data_batch, 128, 3, strides=3, activation=None,
-                                  name='conv', data_format='channels_first')                        # 38832 -> 12944 128
-        output = tf.layers.batch_normalization(output, name='batchNorm', axis=1)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    tf.logging.info('2: {}'.format(outputs[name].shape))
-    name = 'MP1'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL1'], pool_size=4, strides=4,
-                                            name=name, data_format='channels_first')                     # 12944 -> 3236
-
-    tf.logging.info('3: {}'.format(outputs[name].shape))
-    name = 'CL2'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP1'], 256, 3, strides=1, activation=None,
-                                  name='conv', data_format='channels_first')                          # 3236 -> 3234 128
-        output = tf.layers.batch_normalization(output, name='batchNorm', axis=1)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    tf.logging.info('4: {}'.format(outputs[name].shape))
-    name = 'MP2'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=6, strides=6,
-                                            name=name, data_format='channels_first')                       # 3234 -> 539
-
-    tf.logging.info('5: {}'.format(outputs[name].shape))
-    name = 'CL3'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP2'], 256, 3, strides=1, activation=None,
-                                  name='conv', data_format='channels_first')                                # 539 -> 537
-        output = tf.layers.batch_normalization(output, name='batchNorm', axis=1)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    tf.logging.info('6: {}'.format(outputs[name].shape))
-    name = 'MP3'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=3, strides=3,
-                                            name=name, data_format='channels_first')                        # 537 -> 179
-
-    tf.logging.info('7: {}'.format(outputs[name].shape))
-    name = 'CL4'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP3'], 512, 3, strides=1, activation=None,
-                                  name='conv', data_format='channels_first')                                # 179 -> 177
-        output = tf.layers.batch_normalization(output, name='batchNorm', axis=1)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    tf.logging.info('8: {}'.format(outputs[name].shape))
-    name = 'MP4'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL4'], pool_size=11, strides=11,
-                                            name=name, data_format='channels_first')                         # 177 -> 16
-
-    tf.logging.info('9: {}'.format(outputs[name].shape))
-    name = 'CL5'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP4'], 1024, 3, strides=1, activation=None,
-                                  name='conv', data_format='channels_first')                                  # 16 -> 14
-        output = tf.layers.batch_normalization(output, name='batchNorm', axis=1)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    tf.logging.info('10: {}'.format(outputs[name].shape))
-    name = 'MP5'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL5'], pool_size=14, strides=14,
-                                            name=name, data_format='channels_first')                            # 14 -> 1
-
-    tf.logging.info('11: {}'.format(outputs[name].shape))
-    name = 'FLTN'
-    outputs[name] = tf.reshape(outputs['MP5'], [int(outputs['MP5'].shape[0]), -1], name=name)
-
-    tf.logging.info('12: {}'.format(outputs[name].shape))
-    name = 'FCL1'
-    outputs[name] = tf.layers.dense(outputs['FLTN'], output_size, activation=tf.identity, name=name)
-    return outputs[name]
-"""
-
-# Model proposed by Choi et al. using clipped Raw data
-def chrc(data_batch, mode):
-    output_size=50
-    outputs = {}
-    name = 'CL1'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(data_batch, 128, 3, strides=3, activation=None,  name='conv', padding='same')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    name = 'MP1'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL1'], pool_size=8, strides=8, name=name)
-
-    name = 'CL2'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP1'], 384, 3, strides=3, activation=None, name='conv', padding='same')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    name = 'MP2'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=16, strides=16, name=name)
-
-    name = 'CL3'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP2'], 768, 3, strides=3, activation=None, name='conv', padding='same')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    name = 'MP3'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=16, strides=16, name=name)
-
-    name = 'CL4'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP3'], 1024, 3, strides=3, activation=None, name='conv', padding='same')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    name = 'MP4'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL4'], pool_size=25, strides=25, name=name)
-
-    name = 'FLTN'
-    outputs[name] = tf.reshape(outputs['MP4'], [int(outputs['MP4'].shape[0]), -1], name=name)
-
-    name = 'FCL1'
-    outputs[name] = tf.layers.dense(outputs['FLTN'], output_size, activation=tf.identity, name=name)
-    return outputs[name]
-
-
-# Model proposed by Choi et al. using FBanks data
-def chfa(data_batch, mode):
-    raise NotImplementedError('chfa not implemented')
-
-
 # Model proposed by Dieleman et al. using Raw data
 # First Conv: FL256, FS256, FD1
 # Output: 50 Neurons
@@ -640,23 +379,62 @@ def ds256fa(data_batch, mode):
     outputs[name] = tf.layers.dense(outputs['FCL1'], output_size, activation=tf.identity, name=name)
     return outputs[name]
 
-# ---------------------------------------------------------------------------------------------------------------------
-# Basic Models
-# ---------------------------------------------------------------------------------------------------------------------
 
-# Basic MLP for quick testing
-def basic(data_batch, mode):
+# Model proposed by Dieleman et al. using Raw data
+# First Conv: FL256, FS256, FD1
+# Output: 50 Neurons
+# Structure: 3 Conv, 2 MLP
+def ds256rb(data_batch, mode):
+    filt_length = 256
+    filt_depth = 128
+    stride_length = 256
     output_size = 50
     outputs = {}
+
+    name = 'CL1'
+    with tf.variable_scope(name):
+        out_CL1 = tf.layers.conv1d(data_batch,
+                                   filt_depth,
+                                   filt_length,
+                                   strides=stride_length,
+                                   activation=None,
+                                   name='conv')
+        out_CL1 = tf.layers.batch_normalization(out_CL1, name='batchNorm', training=True)
+        out_CL1 = tf.nn.elu(out_CL1, name='nonLin')
+
+    name = 'CL2'
+    with tf.variable_scope(name):
+        out_CL2 = tf.layers.conv1d(out_CL1, 32, 8, strides=1, activation=None, name='conv')
+        out_CL2 = tf.layers.batch_normalization(out_CL2, name='batchNorm', training=True)
+        out_CL2 = tf.nn.elu(out_CL2, name='nonLin')
+
+    name = 'MP1'
+    out_MP1 = tf.layers.max_pooling1d(out_CL2, pool_size=4, strides=4, name=name)
+
+    name = 'CL3'
+    with tf.variable_scope(name):
+        out_CL3 = tf.layers.conv1d(out_MP1, 32, 8, strides=1, activation=None, name='conv')
+        out_CL3 = tf.layers.batch_normalization(out_CL3, name='batchNorm', training=True)
+        out_CL3 = tf.nn.elu(out_CL3, name='nonLin')
+
+    name = 'MP2'
+    out_MP2 = tf.layers.max_pooling1d(out_CL3, pool_size=4, strides=4, name=name)
+
     name = 'FLTN'
-    outputs[name] = tf.reshape(data_batch, [int(data_batch.shape[0]), -1], name=name)
+    out_FLTN = tf.reshape(out_MP2, [int(out_MP2.shape[0]), -1], name=name)
 
     name = 'FCL1'
-    outputs[name] = tf.layers.dense(outputs['FLTN'], 300, activation=tf.nn.elu, name=name)
+    out_FCL1 = tf.layers.dense(out_FLTN, 1000, activation=tf.nn.elu, name=name)
+    out_FCL1 = tf.layers.dropout(out_FCL1, training=True)
 
     name = 'FCL2'
-    outputs[name] = tf.layers.dense(outputs['FCL1'], output_size, activation=tf.identity, name=name)
-    return outputs[name]
+    out_FCL2 = tf.layers.dense(out_FCL1, 200, activation=tf.identity, name=name)
+    out_FCL2 = tf.layers.dropout(out_FCL2, training=True)
+    return out_FCL2
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Baseline
+# ---------------------------------------------------------------------------------------------------------------------
 
 
 # Basic CNN for raw data with
@@ -745,48 +523,6 @@ def mkc_rw(data_batch, mode):
     return outputs[name]
 
 
-# Basic CNN with L2 regularization
-# and no batch normalization.
-def mkc_r_l2(data_batch, mode):
-    regularizer = tf.contrib.layers.l2_regularizer(scale=0.1)
-    actfn = tf.nn.elu
-    output_size=50
-    outputs = {}
-    name = 'CL1'
-    with tf.variable_scope(name):
-        outputs[name] = tf.layers.conv1d(data_batch, 4, 16, strides=16, activation=actfn,  name='conv',
-                                  kernel_regularizer=regularizer)
-
-    name = 'CL2'
-    with tf.variable_scope(name):
-        outputs[name] = tf.layers.conv1d(outputs['CL1'], 8, 8, strides=4, activation=actfn, name='conv',
-                                  kernel_regularizer=regularizer)
-
-    name = 'MP1'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=2, strides=2, name=name)
-
-    name = 'CL3'
-    with tf.variable_scope(name):
-        outputs[name] = tf.layers.conv1d(outputs['MP1'], 12, 4, strides=1, activation=actfn, name='conv',
-                                  kernel_regularizer=regularizer)
-
-    name = 'MP2'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=2, strides=2, name=name)
-
-    name = 'FLTN'
-    outputs[name] = tf.reshape(outputs['MP2'], [int(outputs['MP2'].shape[0]), -1], name=name)
-
-    name = 'FCL1'
-    outputs[name] = tf.layers.dense(outputs['FLTN'], 6000, activation=tf.nn.elu, name=name)
-
-    name = 'FCL2'
-    outputs[name] = tf.layers.dense(outputs['FCL1'], 2000, activation=tf.nn.elu, name=name)
-
-    name = 'FCL3'
-    outputs[name] = tf.layers.dense(outputs['FCL2'], output_size, activation=tf.identity, name=name)
-    return outputs[name]
-
-
 # Basic CNN for fbanks data with
 # batch normalization.
 def mkc_f(data_batch, mode):
@@ -830,6 +566,3 @@ def mkc_f(data_batch, mode):
     return outputs[name]
 
 
-# ---------------------------------------------------------------------------------------------------------------------
-# In Development
-# ---------------------------------------------------------------------------------------------------------------------
