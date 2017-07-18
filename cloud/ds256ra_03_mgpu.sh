@@ -10,7 +10,7 @@ EVAL_FILE=gs://magnatagatune_dataset/valid_win_rawdata.tfrecords
 METADATA_FILE=gs://magnatagatune_dataset/raw_win_metadata.json
 
 TRAIN_STEPS=10100
-LEARNING_RATE=0.5
+LEARNING_RATE=0.1
 EVAL_EPOCHS=1
 EVAL_STEPS=106
 EVAL_BATCH=12
