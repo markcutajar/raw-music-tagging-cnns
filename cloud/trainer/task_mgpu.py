@@ -86,10 +86,6 @@ class EvaluationRunHook(tf.train.SessionRunHook):
                 for name, value_op in metrics['scalar'].items()
             ]
 
-            variables = []
-            for var in self._graph.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
-                variables.append(tf.summary.histogram(var.name.replace(':', '_'), var))
-
             self._summary_metrics = tf.summary.merge_all()
 
             # Saver class add ops to save and restore
