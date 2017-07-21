@@ -200,7 +200,7 @@ class DataProvider(object):
                 features, labels = tf.train.shuffle_batch(
                     [songs, tags],
                     batch_size=self._batch_size,
-                    capacity=self._batch_size*10,
+                    capacity=self._batch_size*5,
                     num_threads=multiprocessing.cpu_count(),
                     enqueue_many=True,
                     min_after_dequeue=self._batch_size)
