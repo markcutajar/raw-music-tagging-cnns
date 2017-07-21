@@ -21,8 +21,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.logging.set_verbosity(tf.logging.INFO)
 
 GPU_MEMORY_FRACTION=0.9
-EVAL_GPUS = ['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3']
-TRAIN_GPUS = ['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3']
+EVAL_GPUS = ['/gpu:3']
+TRAIN_GPUS = ['/gpu:0', '/gpu:1', '/gpu:2']
 NUM_EVAL_GPUS = len(EVAL_GPUS)
 NUM_TRAIN_GPUS = len(TRAIN_GPUS)
 
@@ -149,11 +149,13 @@ class EvaluationRunHook(tf.train.SessionRunHook):
             # Restores previously saved variables from latest checkpoint
             self._saver.restore(session, self._latest_checkpoint)
 
+            tf.logging.info('Initializing locals')
             session.run([
                 tf.tables_initializer(),
                 tf.local_variables_initializer()
             ])
 
+            tf.logging.info('Starting evaluation queue')
             tf.train.start_queue_runners(coord=coord, sess=session)
             train_step = session.run(self._gs)
 
