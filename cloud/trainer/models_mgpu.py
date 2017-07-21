@@ -142,7 +142,7 @@ def get_logits(model, data_batch, window, mode):
         logits_array = tf.map_fn(lambda w: model(w, mode),
                                  elems=data_batch,
                                  back_prop=True,
-                                 parallel_iterations=6,
+                                 parallel_iterations=12,
                                  name='MapModels')
         logits = tf.concat(logits_array, axis=0, name='windowLogits')
         logits = tf.reduce_mean(logits, axis=0, name='averageLogits')
@@ -152,13 +152,17 @@ def get_logits(model, data_batch, window, mode):
         logits_array = tf.map_fn(lambda w: model(w, mode),
                                  elems=data_batch,
                                  back_prop=True,
-                                 parallel_iterations=6,
+                                 parallel_iterations=12,
                                  swap_memory=True,
                                  name='MapModels')
+        
         # logits = superpoolB(tf.concat(tf.unstack(logits_array), axis=1, name='mergingLogits'))
         # logits = superpoolB(tf.concat(tf.unstack(logits_array), axis=1, name='mergingLogits'))
-        #logits = superpoolC(tf.stack(tf.unstack(logits_array), axis=1, name='mergingLogits'))
-        logits = superpoolD(tf.stack(tf.unstack(logits_array), axis=-1, name='mergingLogits'))
+        # logits = superpoolC(tf.stack(tf.unstack(logits_array), axis=1, name='mergingLogits'))
+        # logits = superpoolD(tf.stack(tf.unstack(logits_array), axis=-1, name='mergingLogits'))
+        logits = superpoolE(tf.concat(tf.unstack(logits_array), axis=1, name='mergingLogits'))
+        # logits = superpoolF(tf.stack(tf.unstack(logits_array), axis=1, name='mergingLogits'))
+        # logits = superpoolG(tf.stack(tf.unstack(logits_array), axis=1, name='mergingLogits'))
 
     else:
         raise ValueError('Window type {} not recognized'.format(window))
@@ -231,6 +235,11 @@ def balancing_weights(num_classes, function, factor):
         raise NotImplementedError('Function {} not implemented! Only Log!'.format(function))
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# Super pooling models
+# ---------------------------------------------------------------------------------------------------------------------
+
+
 def superpoolA(data):
     superpool_outputs = {}
     name = 'FCSL1'
@@ -289,9 +298,101 @@ def superpoolD(data):
     return output_final
 
 
+def superpoolE(data):
+    with tf.variable_scope('CL1_SP'):
+        out_CL1_SP = tf.layers.conv1d(data, 50, 3, strides=1, activation=None, name='conv')
+        out_CL1_SP = tf.layers.batch_normalization(out_CL1_SP, name='batchNorm', training=True)
+        out_CL1_SP = tf.nn.elu(out_CL1_SP, name='nonLin')
+
+    out_FLTN_SP = tf.reshape(out_CL1_SP, [int(out_CL1_SP.shape[0]), -1], name='FLTN_SP')
+
+    out_FCL2_SP = tf.layers.dense(out_FLTN_SP, 2500, activation=tf.nn.elu, name='FCSL2')
+    out_FCL2_SP = tf.layers.dropout(out_FCL2_SP, training=True)
+
+    output_final = tf.layers.dense(out_FCL2_SP, 50, activation=tf.identity, name='FCSL3')
+    return output_final
+
+
+"""def superpoolF(data):
+    with tf.variable_scope('CL1_SP'):
+        out_CL1_SP = tf.layers.conv2d(data, 50, 3, strides=1, activation=None, name='conv') # TODO FIX LENGTHS
+        out_CL1_SP = tf.layers.batch_normalization(out_CL1_SP, name='batchNorm', training=True)
+        out_CL1_SP = tf.nn.elu(out_CL1_SP, name='nonLin')
+
+    # TODO Multiple layers?
+    return output_final"""
+
+
+"""def superpoolG(data):
+    with tf.variable_scope('CL1_SP'):
+        out_CL1_SP = tf.layers.conv2d(data, 50, 3, strides=1, activation=None, name='conv') # TODO FIX LENGTHS
+        out_CL1_SP = tf.layers.batch_normalization(out_CL1_SP, name='batchNorm', training=True)
+        out_CL1_SP = tf.nn.elu(out_CL1_SP, name='nonLin')
+
+    # TODO Multiple layers?
+    return output_final"""
+
+
+
+
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Models
+# DM Models
+# ---------------------------------------------------------------------------------------------------------------------
+
+# Deeper model similar to the one by Lee et al.
+# but a bit shallower to limit training time.
+
+# TODO: Depends on SPM result for pooling methods!
+def dm_r(data_batch, mode):
+    filt_length = 256
+    filt_depth = 128
+    stride_length = 256
+    output_size = 50
+    outputs = {}
+
+    name = 'CL1'
+    with tf.variable_scope(name):
+        out_CL1 = tf.layers.conv1d(data_batch,
+                                   filt_depth,
+                                   filt_length,
+                                   strides=stride_length,
+                                   activation=None,
+                                   name='conv')
+        out_CL1 = tf.layers.batch_normalization(out_CL1, name='batchNorm', training=True)
+        out_CL1 = tf.nn.elu(out_CL1, name='nonLin')
+
+    name = 'CL2'
+    with tf.variable_scope(name):
+        out_CL2 = tf.layers.conv1d(out_CL1, 32, 8, strides=1, activation=None, name='conv')
+        out_CL2 = tf.layers.batch_normalization(out_CL2, name='batchNorm', training=True)
+        out_CL2 = tf.nn.elu(out_CL2, name='nonLin')
+
+    name = 'MP1'
+    out_MP1 = tf.layers.max_pooling1d(out_CL2, pool_size=4, strides=4, name=name)
+
+    name = 'CL3'
+    with tf.variable_scope(name):
+        out_CL3 = tf.layers.conv1d(out_MP1, 32, 8, strides=1, activation=None, name='conv')
+        out_CL3 = tf.layers.batch_normalization(out_CL3, name='batchNorm', training=True)
+        out_CL3 = tf.nn.elu(out_CL3, name='nonLin')
+
+    name = 'MP2'
+    out_MP2 = tf.layers.max_pooling1d(out_CL3, pool_size=4, strides=4, name=name)
+
+    name = 'FLTN'
+    out_FLTN = tf.reshape(out_MP2, [int(out_MP2.shape[0]), -1], name=name)
+
+    name = 'FCL1'
+    out_FCL1 = tf.layers.dense(out_FLTN, 1000, activation=tf.nn.elu, name=name)
+
+    name = 'FCL2'
+    out_FCL2 = tf.layers.dense(out_FCL1, output_size, activation=tf.identity, name=name)
+    return out_FCL2
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# DS256 Models
 # ---------------------------------------------------------------------------------------------------------------------
 
 # Model proposed by Dieleman et al. using Raw data
@@ -382,7 +483,7 @@ def ds256fa(data_batch, mode):
 
 # Model proposed by Dieleman et al. using Raw data
 # First Conv: FL256, FS256, FD1
-# Output: 50 Neurons
+# Output: 200 neurons
 # Structure: 3 Conv, 2 MLP
 def ds256rb(data_batch, mode):
     filt_length = 256
@@ -432,8 +533,48 @@ def ds256rb(data_batch, mode):
     out_FCL2 = tf.layers.dropout(out_FCL2, training=True)
     return out_FCL2
 
+
+# Model similar to one proposed by Dieleman et al.
+# First Conv: FL256, FS256, FD1
+# Output: 3x1x32
+# Structure: 4 Conv
+def ds256rc(data_batch, mode):
+    filt_length = 256
+    filt_depth = 128
+    stride_length = 256
+    output_size = 50
+    outputs = {}
+
+    name = 'CL1'
+    with tf.variable_scope(name):
+        out_CL1 = tf.layers.conv1d(data_batch,
+                                   filt_depth,
+                                   filt_length,
+                                   strides=stride_length,
+                                   activation=None,
+                                   name='conv')
+        out_CL1 = tf.layers.batch_normalization(out_CL1, name='batchNorm', training=True)
+        out_CL1 = tf.nn.elu(out_CL1, name='nonLin')
+
+    name = 'CL2'
+    with tf.variable_scope(name):
+        out_CL2 = tf.layers.conv1d(out_CL1, 32, 8, strides=1, activation=None, name='conv')
+        out_CL2 = tf.layers.batch_normalization(out_CL2, name='batchNorm', training=True)
+        out_CL2 = tf.nn.elu(out_CL2, name='nonLin')
+
+    name = 'MP1'
+    out_MP1 = tf.layers.max_pooling1d(out_CL2, pool_size=4, strides=4, name=name)
+
+    name = 'CL3'
+    with tf.variable_scope(name):
+        out_CL3 = tf.layers.conv1d(out_MP1, 32, 8, strides=1, activation=None, name='conv')
+        out_CL3 = tf.layers.batch_normalization(out_CL3, name='batchNorm', training=True)
+        out_CL3 = tf.nn.elu(out_CL3, name='nonLin')
+    return out_CL3
+
+
 # ---------------------------------------------------------------------------------------------------------------------
-# Baseline
+# Baseline Models
 # ---------------------------------------------------------------------------------------------------------------------
 
 
