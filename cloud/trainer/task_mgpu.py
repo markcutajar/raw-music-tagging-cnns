@@ -21,8 +21,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.logging.set_verbosity(tf.logging.INFO)
 
 GPU_MEMORY_FRACTION=0.9
-EVAL_GPUS = ['/gpu:3']
-TRAIN_GPUS = ['/gpu:0', '/gpu:1', '/gpu:2']
+EVAL_GPUS = ['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3']
+TRAIN_GPUS = ['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3']
 NUM_EVAL_GPUS = len(EVAL_GPUS)
 NUM_TRAIN_GPUS = len(TRAIN_GPUS)
 
@@ -70,21 +70,15 @@ class EvaluationRunHook(tf.train.SessionRunHook):
 
         with graph.as_default():
             stream_value_dict, stream_update_dict = tf.contrib.metrics.aggregate_metric_map(metrics['stream'])
-            stream_metrics = [
+            for name, value_op in stream_value_dict.items():
                 tf.summary.scalar(name, value_op)
-                for name, value_op in stream_value_dict.items()
-            ]
 
             perclass_value_dict, perclass_update_dict = tf.contrib.metrics.aggregate_metric_map(metrics['perclass'])
-            perclass_metrics = [
+            for name, value_op in perclass_value_dict.items():
                 tf.summary.scalar(name, value_op)
-                for name, value_op in perclass_value_dict.items()
-            ]
 
-            other_scalars = [
+            for name, value_op in metrics['scalar'].items():
                 tf.summary.scalar(name, value_op)
-                for name, value_op in metrics['scalar'].items()
-            ]
 
             self._summary_metrics = tf.summary.merge_all()
 
