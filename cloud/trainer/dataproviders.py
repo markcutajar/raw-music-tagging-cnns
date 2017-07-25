@@ -102,18 +102,20 @@ class DataProvider(object):
 
         # Merge songs and batch
         # Split into a list of 12 tensors each denoting the corresponding song
-        windowed_songs = tf.split(loaded_songs, windows_per_song, name='WindowedSongs')
-        # Re-stack the data
-        songs = tf.stack(windowed_songs, name='StackedSongs')
-        if self._sample_depth == 1:
-            songs = tf.reshape(songs, [-1, windows_per_song, self._max_samples])
-        else:
-            songs = tf.reshape(songs, [-1, windows_per_song, self._max_samples, self._sample_depth])
+        with tf.variable_scope('SplitWindows'):
+            windowed_songs = tf.split(loaded_songs, windows_per_song, name='WindowedSongs')
+            # Re-stack the data
+            songs = tf.stack(windowed_songs, name='StackedSongs')
+            if self._sample_depth == 1:
+                songs = tf.reshape(songs, [-1, windows_per_song, self._max_samples])
+            else:
+                songs = tf.reshape(songs, [-1, windows_per_song, self._max_samples, self._sample_depth])
 
         # Gather the tags of the corresponding songs
         #tags = tf.reshape(self.tag_prep(loaded_tags), [windows_per_song * self._batch_size, self._num_tags])
         tags = self.tag_prep(loaded_tags, self._num_tags+1)
-        tags = tf.strided_slice(tags, [0, 0], [-1, -1], [windows_per_song, 1])
+        with tf.variable_scope('StridedSlice'):
+            tags = tf.strided_slice(tags, [0, 0], [-1, -1], [windows_per_song, 1])
 
         # Data preparation
         songs, tags = self.remove_unused(songs, tags)
@@ -132,7 +134,7 @@ class DataProvider(object):
         :param read_size: Amount to read from record.
         :return: data (needs to be decoded)
         """
-        with tf.name_scope('InputGenerator'):
+        with tf.variable_scope('InputGenerator'):
             reader = tf.TFRecordReader()
             _, serialized_example = reader.read_up_to(self._filename_queue,
                                                       num_records=read_size)
@@ -152,7 +154,7 @@ class DataProvider(object):
         :param data: Data read from the record
         :return: Decoded data depending on type
         """
-        with tf.name_scope('Decoding'):
+        with tf.variable_scope('Decoding'):
             if self._sample_depth != 1:
                 original_songs = tf.cast(tf.decode_raw(data['song'], tf.float64), tf.float32)
                 songs = tf.reshape(original_songs, [-1, self._max_samples, self._sample_depth])
@@ -169,7 +171,7 @@ class DataProvider(object):
         :param songs: Songs to be potentially clipped
         :return: Potentially clipped songs
         """
-        with tf.name_scope('SamplePrep'):
+        with tf.variable_scope('SamplePrep'):
             if self._num_samples is None or self._num_samples == -1:
                 num_samples = self._max_samples
             else:
@@ -193,13 +195,13 @@ class DataProvider(object):
         :return: Batch of songs and tags
         """
         # Batch and enqueue
-        with tf.name_scope('Shuffle'):
+        with tf.variable_scope('Shuffle'):
             if self._shuffle:
                 features, labels = tf.train.shuffle_batch(
                     [songs, tags],
                     batch_size=self._batch_size,
-                    capacity=self._batch_size*10,
-                    num_threads=multiprocessing.cpu_count(),
+                    capacity=self._batch_size*4,
+                    num_threads=10,#multiprocessing.cpu_count(),
                     enqueue_many=True,
                     min_after_dequeue=self._batch_size)
             else:
@@ -215,11 +217,12 @@ class DataProvider(object):
         :param songs: Batch of songs with dim1 being window dim
         :return: Song permuted [1, 0, 2, 3 (...)]
         """
-        if self._sample_depth == 1:
-            features = tf.transpose(songs, perm=[1, 0, 2, 3])
-        else:
-            features = tf.transpose(songs, perm=[1, 0, 2, 3, 4])
-        return features
+        with tf.variable_scope('TransposeForMap'):
+            if self._sample_depth == 1:
+                features = tf.transpose(songs, perm=[1, 0, 2, 3])
+            else:
+                features = tf.transpose(songs, perm=[1, 0, 2, 3, 4])
+            return features
 
     # Strip to top 50 tags
     @staticmethod
@@ -231,7 +234,7 @@ class DataProvider(object):
         :param tags: Tags to be clipped
         :return: Top 50 tags
         """
-        with tf.name_scope('TagPrep'):
+        with tf.variable_scope('TagPrep'):
             clipped_tags = tf.slice(tags, [0, 0], [-1, shrink])
         return clipped_tags
 
@@ -244,7 +247,7 @@ class DataProvider(object):
         :param tags: Tags in batch
         :return: Batch with reduced songs depending on sparsity
         """
-        with tf.name_scope('FilterUnused'):
+        with tf.variable_scope('FilterUnused'):
             target_sums = tf.reduce_sum(tags, axis=1, name='target_sum')
             where = tf.not_equal(target_sums, tf.constant(0, dtype=tf.float32))
             indices = tf.squeeze(tf.where(where), axis=1, name='squeeze_indices')
@@ -260,7 +263,7 @@ class DataProvider(object):
         :param songs: Batch of songs to be normalized
         :return: Normalized batch
         """
-        with tf.name_scope('InputNormalization'):
+        with tf.variable_scope('InputNormalization'):
             scale_max = tf.reduce_max(songs)
             scale_min = tf.reduce_min(songs)
             factor = tf.maximum(scale_max, scale_min)
@@ -275,6 +278,6 @@ class DataProvider(object):
         :param songs: Batch to which to increase dimensionality
         :return: Batch with added last dimension
         """
-        with tf.name_scope('SetShape'):
+        with tf.variable_scope('SetShape'):
             feats = tf.expand_dims(songs, axis=-1)
         return feats
