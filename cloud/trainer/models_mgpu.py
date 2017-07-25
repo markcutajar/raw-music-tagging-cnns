@@ -707,6 +707,33 @@ def dm16_ra(data_batch, mode):
 # Raw data
 # Output: 50 Neurons
 # Structure: 7 Conv, 1 MLP
+def dm8_ra(data_batch, mode):
+
+    data = tf.expand_dims(data_batch, axis=1)
+    with tf.variable_scope('CL1'):
+        out_l1 = tf.contrib.layers.conv2d(data, 64, [1, 8],
+                                          stride=[1, 8],
+                                          scope='conv',
+                                          activation_fn=tf.nn.elu,
+                                          normalizer_fn=tf.contrib.layers.batch_norm)  # 4854
+
+    out_l2 = conv_max_layers_1d(out_l1, 64, 4, 1, 'CL2', 4, 4, 'MP1')  # 1212
+    out_l3 = conv_max_layers_1d(out_l2, 128, 4, 1, 'CL3', 4, 4, 'MP2')  # 302
+    out_l4 = conv_max_layers_1d(out_l3, 128, 4, 1, 'CL4', 4, 4, 'MP3')  # 74
+    out_l5 = conv_max_layers_1d(out_l4, 256, 4, 1, 'CL5', 4, 4, 'MP4')  # 17
+    out_l6 = conv_max_layers_1d(out_l5, 256, 4, 1, 'CL6', 2, 2, 'MP5')  # 6
+    out_l7 = conv_max_layers_1d(out_l6, 512, 4, 1, 'CL7', 2, 2, 'MP6')  # 1
+
+    out_drop = tf.contrib.layers.dropout(out_l7)
+    out_fltn = tf.reshape(out_drop, [int(out_drop.shape[0]), -1], name='FLTN')
+    out_fcl = tf.layers.dense(out_fltn, 50, activation=tf.nn.sigmoid, name='FCL')
+    return out_fcl
+
+
+# Deeper Model similar to proposed by Lee et al.
+# Raw data
+# Output: 50 Neurons
+# Structure: 7 Conv, 1 MLP
 def dm64_ra(data_batch, mode):
 
     data = tf.expand_dims(data_batch, axis=1)
