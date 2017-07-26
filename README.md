@@ -53,9 +53,7 @@ As much as possible the low level API shall be used with some minor exceptions. 
 
 ### Important test results
 
-
-
-
+### Future work
 
 *To be continued...*
 
