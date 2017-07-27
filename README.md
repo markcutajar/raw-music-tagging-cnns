@@ -44,12 +44,14 @@ Due to the issues with the latter two datasets, the MagnaTagATune dataset was de
 
 ### Framework
 
-This project will make use of Tensorflow Python API v1.2 and Cloud SDK. The models are first tested on the local environment and then exported to be trained on Cloud ML. The models are trained in distributed manner in order to minimize the computational time and hence larger networks can be used. 
+This project will make use of Tensorflow Python API v1.2 and Cloud SDK. The models are first tested on the local environment and then exported to be trained on Cloud ML. The models are trained in either distributed manner or using GPUs in order to minimize the computational time and hence larger networks can be used. 
 
 As much as possible the low level API shall be used with some minor exceptions. This is done so the graph can be customised as much as needed for the different tests.
 
-1. Discuss Framework both Cluster and GPU
-2. Models implemented
+The main script, irrespecitve if a cluster or GPUs are used are trained using the same script structure. First a function dispatches the function on the cloud. If the machine running the function is the master node, an evalution graph is setup together with the training graph, else only the training graph. The general diagram for this script is shown in the figure below.
+
+![Figure 1: Script Flowchart](/images/script_flowchart.png?raw=true "Script Flowchart")
+
 
 ### Important test results
 
