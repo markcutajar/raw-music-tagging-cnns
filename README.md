@@ -52,6 +52,8 @@ The main script, irrespecitve if a cluster or GPUs are used are trained using th
 
 <br><p align="center"><img src="images/script_flowchart.png" width="500"></p><br>
 
+The only difference between the cluster setup and the multi-GPU setup is that in the multi-GPU setup, the gradients are computed seperately on the differnet GPUs and then concatenated and applied using the CPU. This is explained extensively <a href="https://www.tensorflow.org/tutorials/deep_cnn">here</a>. The distributed setup is briefly explained <a href="https://www.tensorflow.org/deploy/distributed">here</a>.
+
 ### Important test results
 
 ### Future work
