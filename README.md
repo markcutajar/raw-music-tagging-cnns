@@ -50,7 +50,7 @@ As much as possible the low level API shall be used with some minor exceptions. 
 
 The main script, irrespecitve if a cluster or GPUs are used are trained using the same script structure. First a function dispatches the function on the cloud. If the machine running the function is the master node, an evalution graph is setup together with the training graph, else only the training graph. The general diagram for this script is shown in the figure below.
 
-<br><p align="center"><img src="images/script_flowchart.png" width="400"></p>
+<p align="center"><img src="images/script_flowchart.png" width="400"></p>
 
 The only difference between the cluster setup and the multi-GPU setup is that in the multi-GPU setup, the gradients are computed seperately on the differnet GPUs and then concatenated and applied using the CPU. This is explained extensively <a href="https://www.tensorflow.org/tutorials/deep_cnn">here</a>. The distributed setup is briefly explained <a href="https://www.tensorflow.org/deploy/distributed">here</a>.
 
