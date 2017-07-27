@@ -50,8 +50,7 @@ As much as possible the low level API shall be used with some minor exceptions. 
 
 The main script, irrespecitve if a cluster or GPUs are used are trained using the same script structure. First a function dispatches the function on the cloud. If the machine running the function is the master node, an evalution graph is setup together with the training graph, else only the training graph. The general diagram for this script is shown in the figure below.
 
-![Figure 1: Script Flowchart](/images/script_flowchart.png?raw=true "Script Flowchart")
-
+![Figure 1: Script Flowchart](/images/script_flowchart.png?raw=true =10x "Script Flowchart")
 
 ### Important test results
 
