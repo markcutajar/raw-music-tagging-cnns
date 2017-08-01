@@ -143,9 +143,9 @@ def get_logits(model, data_batch, window, mode):
                                  elems=data_batch,
                                  back_prop=True,
                                  parallel_iterations=12,
+                                 swap_memory=True,
                                  name='MapModels')
-        logits = tf.concat(logits_array, axis=0, name='windowLogits')
-        logits = tf.reduce_mean(logits, axis=0, name='averageLogits')
+        logits = tf.reduce_mean(logits_array, axis=0, name='averageLogits')
     elif window in SPM:
         # super pooled model
         # model with tf.map_fn
@@ -248,6 +248,44 @@ def conv_max_layers_1d(in_layer,
 
     out_mp = tf.contrib.layers.max_pool2d(out_cl, [1, pool_length], stride=[1, pool_stride], scope=pool_name)
     return out_mp
+
+
+def conv_avg_layers_1d(in_layer,
+                       depth,
+                       filter_length,
+                       filter_stride,
+                       conv_name,
+                       pool_length,
+                       pool_stride,
+                       pool_name,
+                       dil_rate=1):
+
+    with tf.variable_scope(conv_name):
+        out_cl = tf.contrib.layers.conv2d(in_layer, depth, [1, filter_length],
+                                          stride=[1, filter_stride],
+                                          scope='conv',
+                                          rate=dil_rate,
+                                          activation_fn=tf.nn.elu,
+                                          normalizer_fn=tf.contrib.layers.batch_norm)
+
+    out_mp = tf.contrib.layers.avg_pool2d(out_cl, [1, pool_length], stride=[1, pool_stride], scope=pool_name)
+    return out_mp
+
+
+def conv_layers_1d(in_layer,
+                   depth,
+                   filter_length,
+                   filter_stride,
+                   conv_name,
+                   dil_rate=1):
+
+    with tf.variable_scope(conv_name):
+        return tf.contrib.layers.conv2d(in_layer, depth, [1, filter_length],
+                                        stride=[1, filter_stride],
+                                        scope='conv',
+                                        rate=dil_rate,
+                                        activation_fn=tf.nn.elu,
+                                        normalizer_fn=tf.contrib.layers.batch_norm)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -678,6 +716,66 @@ def dm16_ra(data_batch, mode):
 # Raw data
 # Output: 50 Neurons
 # Structure: 7 Conv, 1 MLP
+def dm16_rb(data_batch, mode):
+
+    data = tf.expand_dims(data_batch, axis=1)
+    with tf.variable_scope('CL1'):
+        out_l1 = tf.contrib.layers.conv2d(data, 64, [1, 16],
+                                          stride=[1, 16],
+                                          scope='conv',
+                                          activation_fn=tf.nn.elu,
+                                          normalizer_fn=tf.contrib.layers.batch_norm)  # 2427
+
+    out_l2 = conv_max_layers_1d(out_l1, 64, 4, 1, 'CL2', 4, 4, 'MP1')  # 605
+    out_l3 = conv_max_layers_1d(out_l2, 128, 4, 1, 'CL3', 4, 4, 'MP2')  # 150
+    out_l4 = conv_max_layers_1d(out_l3, 128, 4, 1, 'CL4', 4, 4, 'MP3')  # 39
+    out_l5 = conv_max_layers_1d(out_l4, 256, 4, 1, 'CL5', 2, 2, 'MP4')  # 17
+    out_l6 = conv_max_layers_1d(out_l5, 256, 4, 1, 'CL6', 2, 2, 'MP5')  # 6
+    out_l7 = conv_max_layers_1d(out_l6, 512, 4, 1, 'CL7', 2, 2, 'MP6')  # 1
+
+    out_drop = tf.contrib.layers.dropout(out_l7)
+    out_fltn = tf.reshape(out_drop, [int(out_drop.shape[0]), -1], name='FLTN')
+    out_fcl = tf.layers.dense(out_fltn, 50, activation=tf.identity, name='FCL')
+    return out_fcl
+
+
+# Deeper Model similar to proposed by Lee et al.
+# Raw data
+# Output: 50 Neurons
+# Structure: 7 Conv, 1 MLP
+def dm16_rc(data_batch, mode):
+
+    data = tf.expand_dims(data_batch, axis=1)
+    with tf.variable_scope('CL1'):
+        out_l1 = tf.contrib.layers.conv2d(data, 64, [1, 16],
+                                          stride=[1, 16],
+                                          scope='conv',
+                                          activation_fn=tf.nn.elu,
+                                          normalizer_fn=tf.contrib.layers.batch_norm)  # 29124
+
+    out_l2 = conv_max_layers_1d(out_l1, 64, 4, 1, 'CL2', 8, 8, 'MP1')  # 3640
+    out_l3 = conv_max_layers_1d(out_l2, 128, 4, 1, 'CL3', 8, 8, 'MP2')  # 454
+    out_l4 = conv_max_layers_1d(out_l3, 128, 4, 1, 'CL4', 4, 4, 'MP3')  # 113
+    out_l5 = conv_max_layers_1d(out_l4, 256, 4, 1, 'CL5', 4, 4, 'MP4')  # 27
+    out_l6 = conv_max_layers_1d(out_l5, 256, 4, 1, 'CL6', 4, 4, 'MP5')  # 5
+
+    with tf.variable_scope('CL7'):
+        out_l7 = tf.contrib.layers.conv2d(out_l6, 512, [1, 4],
+                                          stride=[1, 4],
+                                          scope='conv',
+                                          activation_fn=tf.nn.elu,
+                                          normalizer_fn=tf.contrib.layers.batch_norm)
+
+    out_drop = tf.contrib.layers.dropout(out_l7)
+    out_fltn = tf.reshape(out_drop, [int(out_drop.shape[0]), -1], name='FLTN')
+    out_fcl = tf.layers.dense(out_fltn, 50, activation=tf.nn.sigmoid, name='FCL')
+    return out_fcl
+
+
+# Deeper Model similar to proposed by Lee et al.
+# Raw data
+# Output: 50 Neurons
+# Structure: 7 Conv, 1 MLP
 def dm64_ra(data_batch, mode):
 
     data = tf.expand_dims(data_batch, axis=1)
@@ -818,6 +916,143 @@ def dl16_4_ra(data_batch, mode):
     out_l4 = conv_max_layers_1d(out_l3, 128, 4, 1, 'CL4', 4, 4, 'MP3')  # 39
     out_l5 = conv_max_layers_1d(out_l4, 256, 4, 1, 'CL5', 2, 2, 'MP4')  # 17
     out_l6 = conv_max_layers_1d(out_l5, 256, 4, 1, 'CL6', 2, 2, 'MP5')  # 6
+    out_l7 = conv_max_layers_1d(out_l6, 512, 4, 1, 'CL7', 2, 2, 'MP6')  # 1
+
+    out_drop = tf.contrib.layers.dropout(out_l7)
+    out_fltn = tf.reshape(out_drop, [int(out_drop.shape[0]), -1], name='FLTN')
+    out_fcl = tf.layers.dense(out_fltn, 50, activation=tf.nn.sigmoid, name='FCL')
+    return out_fcl
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# MUL Models
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+# Deeper Model similar to proposed by Lee et al.
+# Raw data
+# Output: 50 Neurons
+# Structure: 7 Conv, 1 MLP
+def mul16a(data_batch, mode):
+
+    data = tf.expand_dims(data_batch, axis=1)
+    out_l1 = conv_layers_1d(data, 32, 16, 16, 'CL1')  # 2427
+
+    out_l2a = conv_max_layers_1d(out_l1, 32, 4, 1, 'CL2a', 4, 4, 'MP1a')  # 606
+    out_l2b = conv_avg_layers_1d(out_l1, 32, 16, 1, 'CL2b', 4, 4, 'MP1b')  # 606
+
+    out_l2 = tf.concat([out_l2a, out_l2b], axis=-1)
+
+    out_l3a = conv_max_layers_1d(out_l2, 64, 4, 1, 'CL3a', 4, 4, 'MP2a')  # 151
+    out_l3b = conv_avg_layers_1d(out_l2, 64, 16, 1, 'CL3b', 4, 4, 'MP2b')  # 151
+
+    out_l3 = tf.concat([out_l3a, out_l3b], axis=-1)
+
+    out_l4 = conv_max_layers_1d(out_l3, 128, 4, 1, 'CL4', 4, 4, 'MP3')  # 39
+    out_l5 = conv_max_layers_1d(out_l4, 256, 4, 1, 'CL5', 4, 4, 'MP4')  # 9
+    out_l6 = conv_max_layers_1d(out_l5, 256, 4, 1, 'CL6', 4, 4, 'MP5')  # 2
+    out_l7 = conv_max_layers_1d(out_l6, 512, 4, 1, 'CL7', 2, 2, 'MP6')  # 1
+
+    out_drop = tf.contrib.layers.dropout(out_l7)
+    out_fltn = tf.reshape(out_drop, [int(out_drop.shape[0]), -1], name='FLTN')
+    out_fcl = tf.layers.dense(out_fltn, 50, activation=tf.nn.sigmoid, name='FCL')
+    return out_fcl
+
+
+# Deeper Model similar to proposed by Lee et al.
+# Raw data
+# Output: 50 Neurons
+# Structure: 7 Conv, 1 MLP
+def mul16b(data_batch, mode):
+
+    data = tf.expand_dims(data_batch, axis=1)
+    out_l1 = conv_layers_1d(data, 32, 16, 16, 'CL1')  # 2427
+
+    out_l2a = conv_max_layers_1d(out_l1, 32, 4, 1, 'CL2a', 4, 4, 'MP1a')  # 606
+
+    out_l2ba = conv_layers_1d(out_l1, 32, 8, 1, 'CL2ba', dil_rate=8)
+    out_l2bb = conv_layers_1d(out_l2ba, 32, 8, 1, 'CL2bb', dil_rate=4)
+    out_l2b = conv_avg_layers_1d(out_l2bb, 32, 8, 1, 'CL2b', 4, 4, 'MP1b', dil_rate=2)
+
+    out_l2 = tf.concat([out_l2a, out_l2b], axis=-1)
+
+    out_l3a = conv_max_layers_1d(out_l2, 64, 4, 1, 'CL3a', 4, 4, 'MP2a')  # 151
+
+    out_l3ba = conv_layers_1d(out_l2, 32, 8, 1, 'CL3ba', dil_rate=8)
+    out_l3bb = conv_layers_1d(out_l3ba, 32, 8, 1, 'CL3bb', dil_rate=4)
+    out_l3b = conv_avg_layers_1d(out_l3bb, 32, 8, 1, 'CL3b', 4, 4, 'MP2b', dil_rate=2)
+
+    out_l3 = tf.concat([out_l3a, out_l3b], axis=-1)
+
+    out_l4 = conv_max_layers_1d(out_l3, 128, 4, 1, 'CL4', 4, 4, 'MP3')  # 39
+    out_l5 = conv_max_layers_1d(out_l4, 256, 4, 1, 'CL5', 4, 4, 'MP4')  # 9
+    out_l6 = conv_max_layers_1d(out_l5, 256, 4, 1, 'CL6', 4, 4, 'MP5')  # 2
+    out_l7 = conv_max_layers_1d(out_l6, 512, 4, 1, 'CL7', 2, 2, 'MP6')  # 1
+
+    out_drop = tf.contrib.layers.dropout(out_l7)
+    out_fltn = tf.reshape(out_drop, [int(out_drop.shape[0]), -1], name='FLTN')
+    out_fcl = tf.layers.dense(out_fltn, 50, activation=tf.nn.sigmoid, name='FCL')
+    return out_fcl
+
+
+# Deeper Model similar to proposed by Lee et al.
+# Raw data
+# Output: 50 Neurons
+# Structure: 7 Conv, 1 MLP
+def mul16c(data_batch, mode):
+
+    data = tf.expand_dims(data_batch, axis=1)
+    out_l1 = conv_layers_1d(data, 32, 16, 16, 'CL1')  # 2427
+
+    out_l2a = conv_max_layers_1d(out_l1, 32, 4, 1, 'CL2a', 4, 4, 'MP1a')  # 606
+    out_l2ba = conv_layers_1d(out_l1, 32, 8, 1, 'CL2ba', dil_rate=8)
+    out_l2bb = conv_layers_1d(out_l2ba, 32, 8, 1, 'CL2bb', dil_rate=4)
+    out_l2b = conv_avg_layers_1d(out_l2bb, 32, 8, 1, 'CL2b', 4, 4, 'MP1b', dil_rate=2)
+    out_l2c = conv_avg_layers_1d(out_l1, 32, 16, 1, 'CL2c', 4, 4, 'MP1c')
+    out_l2 = tf.concat([out_l2a, out_l2b, out_l2c], axis=-1)
+
+    out_l3a = conv_max_layers_1d(out_l2, 64, 4, 1, 'CL3a', 4, 4, 'MP2a')  # 151
+    out_l3ba = conv_layers_1d(out_l2, 32, 8, 1, 'CL3ba', dil_rate=8)
+    out_l3bb = conv_layers_1d(out_l3ba, 32, 8, 1, 'CL3bb', dil_rate=4)
+    out_l3b = conv_avg_layers_1d(out_l3bb, 32, 8, 1, 'CL3b', 4, 4, 'MP2b', dil_rate=2)
+    out_l3c = conv_avg_layers_1d(out_l2, 64, 16, 1, 'CL3c', 4, 4, 'MP2c')
+    out_l3 = tf.concat([out_l3a, out_l3b, out_l3c], axis=-1)
+
+    out_l4 = conv_max_layers_1d(out_l3, 128, 4, 1, 'CL4', 4, 4, 'MP3')  # 39
+    out_l5 = conv_max_layers_1d(out_l4, 256, 4, 1, 'CL5', 4, 4, 'MP4')  # 9
+    out_l6 = conv_max_layers_1d(out_l5, 256, 4, 1, 'CL6', 4, 4, 'MP5')  # 2
+    out_l7 = conv_max_layers_1d(out_l6, 512, 4, 1, 'CL7', 2, 2, 'MP6')  # 1
+
+    out_drop = tf.contrib.layers.dropout(out_l7)
+    out_fltn = tf.reshape(out_drop, [int(out_drop.shape[0]), -1], name='FLTN')
+    out_fcl = tf.layers.dense(out_fltn, 50, activation=tf.nn.sigmoid, name='FCL')
+    return out_fcl
+
+
+# Deeper Model similar to proposed by Lee et al.
+# Raw data
+# Output: 50 Neurons
+# Structure: 7 Conv, 1 MLP
+def mul16d(data_batch, mode):
+
+    data = tf.expand_dims(data_batch, axis=1)
+    out_l1a = conv_layers_1d(data, 32, 16, 16, 'CL1a')
+    out_l1b = conv_layers_1d(data, 64, 64, 16, 'CL1b')
+    out_l1 = tf.concat([out_l1a, out_l1b], axis=-1)
+
+    out_l2a = conv_max_layers_1d(out_l1, 32, 4, 1, 'CL2a', 4, 4, 'MP1a')  # 606
+    out_l2b = conv_avg_layers_1d(out_l1, 32, 16, 1, 'CL2b', 4, 4, 'MP1b')  # 606
+
+    out_l2 = tf.concat([out_l2a, out_l2b], axis=-1)
+
+    out_l3a = conv_max_layers_1d(out_l2, 64, 4, 1, 'CL3a', 4, 4, 'MP2a')  # 151
+    out_l3b = conv_avg_layers_1d(out_l2, 64, 16, 1, 'CL3b', 4, 4, 'MP2b')  # 151
+
+    out_l3 = tf.concat([out_l3a, out_l3b], axis=-1)
+
+    out_l4 = conv_max_layers_1d(out_l3, 128, 4, 1, 'CL4', 4, 4, 'MP3')  # 39
+    out_l5 = conv_max_layers_1d(out_l4, 256, 4, 1, 'CL5', 4, 4, 'MP4')  # 9
+    out_l6 = conv_max_layers_1d(out_l5, 256, 4, 1, 'CL6', 4, 4, 'MP5')  # 2
     out_l7 = conv_max_layers_1d(out_l6, 512, 4, 1, 'CL7', 2, 2, 'MP6')  # 1
 
     out_drop = tf.contrib.layers.dropout(out_l7)

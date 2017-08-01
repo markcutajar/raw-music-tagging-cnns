@@ -15,7 +15,7 @@ import os
 from . import models_mgpu as models
 import threading
 import tensorflow as tf
-from .dataproviders_mgpu import DataProvider
+from .dataproviders import DataProvider
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -26,13 +26,13 @@ TRAIN_GPUS = ['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3']
 NUM_EVAL_GPUS = len(EVAL_GPUS)
 NUM_TRAIN_GPUS = len(TRAIN_GPUS)
 
-# Possible GPUS
+# Possible GPUS to use on Cloud ML
 # ['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3', '/gpu:4', '/gpu:5', '/gpu:6', '/gpu:7']
 # ['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3']
 
 TRAIN_CHECKPOINT = 60
 TRAIN_SUMMARIES = 60
-CHECKPOINT_PER_EVAL = 10  #2
+CHECKPOINT_PER_EVAL = 10
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -69,6 +69,8 @@ class EvaluationRunHook(tf.train.SessionRunHook):
         self._graph = graph
 
         with graph.as_default():
+
+            # Save metrics as summaries
             stream_value_dict, stream_update_dict = tf.contrib.metrics.aggregate_metric_map(metrics['stream'])
             for name, value_op in stream_value_dict.items():
                 tf.summary.scalar(name, value_op)
@@ -143,19 +145,23 @@ class EvaluationRunHook(tf.train.SessionRunHook):
             # Restores previously saved variables from latest checkpoint
             self._saver.restore(session, self._latest_checkpoint)
 
+            # initialize local variables
             tf.logging.info('Initializing locals')
             session.run([
                 tf.tables_initializer(),
                 tf.local_variables_initializer()
             ])
 
+            # start queue runners for data queues
             tf.logging.info('Starting evaluation queue')
             tf.train.start_queue_runners(coord=coord, sess=session)
             train_step = session.run(self._gs)
 
+            # save metadata object
             run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
             run_metadata = tf.RunMetadata()
 
+            # run evaluation of the whole evaluation dataset
             tf.logging.info('Starting Evaluation For Step: {}'.format(train_step))
             with coord.stop_on_exception():
                 eval_step = 0
@@ -270,6 +276,7 @@ def run(target,
             else:
                 features, labels = eval_data.windows_batch_in()
 
+            # Create evaluation model
             metrics = models.controller(
                 model_function,
                 models.EVAL,
@@ -369,6 +376,10 @@ def run(target,
 
 def dispatch(*args, **kwargs):
     """Parse TF_CONFIG to cluster_spec and call run() method
+
+    This method is needed to start the job on a number of managed
+    cluster workers. Furthermore, it also adds the PS which handle
+    the variables.
     """
     tf.logging.info('Setting up the server')
     tf_config = os.environ.get('TF_CONFIG')

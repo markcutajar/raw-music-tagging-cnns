@@ -12,17 +12,19 @@
 import argparse
 import json
 import os
-from . import models as models
 import threading
+
 import tensorflow as tf
-from .dataproviders import DataProvider
+
+from cloud.backup.dataproviders import DataProvider
+from . import models as models
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.logging.set_verbosity(tf.logging.INFO)
 
-TRAIN_CHECKPOINT = 60
-TRAIN_SUMMARIES = 60
-CHECKPOINT_PER_EVAL = 4  #2
+TRAIN_CHECKPOINT = 120
+TRAIN_SUMMARIES = 120
+CHECKPOINT_PER_EVAL = 5
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -60,25 +62,15 @@ class EvaluationRunHook(tf.train.SessionRunHook):
 
         with graph.as_default():
             stream_value_dict, stream_update_dict = tf.contrib.metrics.aggregate_metric_map(metrics['stream'])
-            stream_metrics = [
+            for name, value_op in stream_value_dict.items():
                 tf.summary.scalar(name, value_op)
-                for name, value_op in stream_value_dict.items()
-            ]
 
             perclass_value_dict, perclass_update_dict = tf.contrib.metrics.aggregate_metric_map(metrics['perclass'])
-            perclass_metrics = [
+            for name, value_op in perclass_value_dict.items():
                 tf.summary.scalar(name, value_op)
-                for name, value_op in perclass_value_dict.items()
-            ]
 
-            other_scalars = [
+            for name, value_op in metrics['scalar'].items():
                 tf.summary.scalar(name, value_op)
-                for name, value_op in metrics['scalar'].items()
-            ]
-
-            variables = []
-            for var in self._graph.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
-                variables.append(tf.summary.histogram(var.name.replace(':', '_'), var))
 
             self._summary_metrics = tf.summary.merge_all()
 
@@ -92,8 +84,6 @@ class EvaluationRunHook(tf.train.SessionRunHook):
 
             self._final_ops_dict = [stream_value_dict, perclass_value_dict]
             self._eval_ops = [stream_update_dict.values(), perclass_update_dict.values()]
-            # self._final_ops_dict = stream_value_dict
-            # self._eval_ops = stream_update_dict.values()
 
         # MonitoredTrainingSession runs hooks in background threads
         # and it doesn't wait for the thread from the last session.run()
@@ -131,26 +121,30 @@ class EvaluationRunHook(tf.train.SessionRunHook):
     def end(self, session):
         """Called at then end of session to make sure we always evaluate."""
         self._update_latest_checkpoint()
-        # with self._eval_lock:
+        #with self._eval_lock:
         #    self._run_eval()
 
     def _run_eval(self):
         """Run model evaluation and generate summaries."""
         coord = tf.train.Coordinator(clean_stop_exception_types=(
             tf.errors.CancelledError, tf.errors.OutOfRangeError))
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
-        with tf.Session(graph=self._graph, config=tf.ConfigProto(gpu_options=gpu_options)) as session:
+        with tf.Session(graph=self._graph, config=tf.ConfigProto(log_device_placement=False)) as session:
+
             # Restores previously saved variables from latest checkpoint
             self._saver.restore(session, self._latest_checkpoint)
 
+            # initialize local variables such as streaming metrics
             session.run([
                 tf.tables_initializer(),
                 tf.local_variables_initializer()
             ])
 
+            # start queue runners to loade data
             tf.train.start_queue_runners(coord=coord, sess=session)
             train_step = session.run(self._gs)
 
+            # metadata options for evaluation run
+            # records information such as memory and time requirement
             run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
             run_metadata = tf.RunMetadata()
 
@@ -164,14 +158,13 @@ class EvaluationRunHook(tf.train.SessionRunHook):
                         self._eval_ops
                     ], options=run_options, run_metadata=run_metadata)
 
-                    if eval_step % 100 == 0:
+                    if eval_step % 20 == 0:
                         tf.logging.info("On Evaluation Step: {}".format(eval_step))
                     eval_step += 1
 
             # Write the summaries, save results and log
             self._file_writer.add_summary(results, global_step=train_step)
-            self._file_writer.add_run_metadata(run_metadata, 'run_metadata_{}'.format(train_step),
-                                               global_step=train_step)
+            self._file_writer.add_run_metadata(run_metadata, 'run_mdata_{}'.format(train_step), global_step=train_step)
             self._file_writer.flush()
             tf.logging.info('Eval complete. Step: {}'.format(eval_step))
 
@@ -182,7 +175,7 @@ class EvaluationRunHook(tf.train.SessionRunHook):
 
 
 def run(target,
-        cluster,
+        cluster_spec,
         is_chief,
         job_dir,
         train_files,
@@ -198,15 +191,14 @@ def run(target,
         eval_num_epochs,
         num_epochs,
         target_size,
-        selective_tags,
         num_song_samples,
         windowing_type):
     """Run the training and evaluation graph.
 
     Args:
         target (string): TensorFlow server target
+        cluster_spec (object): Cluster being used to train the model
         is_chief (bool): Boolean flag to specify a chief server
-        cluster: Cluster_spec of the custer being run for replica_device_setter
         train_files (string): File for training
         eval_files (string): File for evaluation
         metadata_files (string): File containing dataset metadata
@@ -225,10 +217,8 @@ def run(target,
         eval_num_epochs (int): Number of epochs during evaluation
         num_epochs (int): Maximum number of training data epochs on which to train
         target_size (int): The number of tags being use as an output
-        selective_tags (filename): Filename for selective tags in json
         num_song_samples (int): Samples from the songs to be used for training
-        windowing_type (str): The type of windowing to be used.
-            None: No windowing
+        windowing_type (str): Windowing type for the model
             STME: Seperate training and merged evaluation
             SPM: Super-pooled model
     """
@@ -247,6 +237,7 @@ def run(target,
         # tf.logging.info('Learning Rate: {}'.format(learning_rate))
         evaluation_graph = tf.Graph()
         with evaluation_graph.as_default():
+
             # Evaluation data provider
             eval_data = DataProvider(
                 [eval_files],
@@ -257,13 +248,13 @@ def run(target,
                 num_samples=num_song_samples
             )
 
-            # Features and label tensors
             if windowing_type is None:
                 features, labels = eval_data.batch_in()
-            else:
+            elif windowing_type == 'SPM' or windowing_type == 'STME':
                 features, labels = eval_data.windows_batch_in()
+            else:
+                raise ValueError('windowing_type {} not recognised'.format(windowing_type))
 
-            if is_chief: tf.logging.info('size of eval inputs: {}'.format(features.shape))
             # Model for evaluation
             metrics = models.controller(
                 model_function,
@@ -289,7 +280,7 @@ def run(target,
     # Create a new graph and specify that as default
     with tf.Graph().as_default():
 
-        with tf.device(tf.train.replica_device_setter()):  # cluster=cluster)):
+        with tf.device(tf.train.replica_device_setter(cluster=cluster_spec)):
             # Training data provider
             train_data = DataProvider(
                 [train_files],
@@ -301,15 +292,15 @@ def run(target,
             )
 
             # Features and label tensors
-            if windowing_type is None:
-                features, labels = train_data.batch_in()
-            elif windowing_type is 'STME':
+            if windowing_type == 'SPM':
+                features, labels = train_data.windows_batch_in()
+            elif windowing_type == 'STME' or windowing_type is None:
                 features, labels = train_data.batch_in()
             else:
-                features, labels = train_data.windows_batch_in()
-            if is_chief:  tf.logging.info('size of train inputs: {}'.format(features.shape))
+                raise ValueError('windowing_type {} not recognised'.format(windowing_type))
+
             # Model for training
-            [train_op, global_step_tensor, train_error] = models.controller(
+            [train_op, global_step_tensor] = models.controller(
                 model_function,
                 models.TRAIN,
                 features,
@@ -318,21 +309,10 @@ def run(target,
                 window=windowing_type
             )
 
-        # Summary for training error
-        error_summary = tf.summary.merge([
-            tf.summary.scalar('training_error', train_error)
-        ])
-
-        # GPU option to limit usage of GPU memory per process.
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
-
-        # File writer for metadata of master:replica
         if is_chief:
-            meta_writer = tf.summary.FileWriter(os.path.join(job_dir, 'train'), graph=tf.get_default_graph())
+            train_file_writer = tf.summary.FileWriter(os.path.join(job_dir, 'eval'))
 
         # Creates a MonitoredSession for training
-        # MonitoredSession is a Session-like object that handles
-        # initialization, recovery and hooks
         tf.logging.info('Starting session')
         with tf.train.MonitoredTrainingSession(master=target,
                                                is_chief=is_chief,
@@ -340,38 +320,36 @@ def run(target,
                                                hooks=hooks,
                                                save_checkpoint_secs=TRAIN_CHECKPOINT,
                                                save_summaries_steps=TRAIN_SUMMARIES,
-                                               config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement = True)) as session:
-            # Command for logging variable and ops device placement: log_device_placement = True
+                                               config=tf.ConfigProto(log_device_placement=True)) as session:
 
             # Tuple of exceptions that should cause a clean stop of the coordinator
+            if is_chief:
+                tf.logging.info('Starting coordinator')
             coord = tf.train.Coordinator(clean_stop_exception_types=(
                 tf.errors.CancelledError, tf.errors.OutOfRangeError))
-            # Important to start all queue runners so that data is available
-            # for reading.
-            # Initialize the input_fn thread to load the queue runner.
+            if is_chief:
+                tf.logging.info('Starting queue runners')
             tf.train.start_queue_runners(coord=coord, sess=session)
 
             # Global step to keep track of global number of steps particularly in
             # distributed setting
+            if is_chief:
+                tf.logging.info('Evaluating initial step')
             step = global_step_tensor.eval(session=session)
 
-            # Set up run options and metadata
             run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
             run_metadata = tf.RunMetadata()
 
-            # Run the training graph which returns the step number as tracked by
-            # the global step tensor.
-            # When train epochs is reached, coord.should_stop() will be true.
+            # Run the training graph
+            if is_chief:
+                tf.logging.info('Starting training')
             with coord.stop_on_exception():
                 while (train_steps is None or step < train_steps) and not coord.should_stop():
-                    step, _, error = session.run([global_step_tensor, train_op, error_summary],
-                                                 options=run_options, run_metadata=run_metadata)
-                    if is_chief:
-                        if step == 10 or step % 2000 == 0:
-                            meta_writer.add_run_metadata(run_metadata,
-                                                         'run_metadata_{}'.format(step),
-                                                         global_step=step)
+                    step, _, = session.run([global_step_tensor, train_op] , options=run_options, run_metadata=run_metadata)
 
+                if is_chief and step < 10:
+                    train_file_writer.add_run_metadata(run_metadata, 'run_mdata_{}'.format(step),
+                                                       global_step=step)
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Cluster Creator
@@ -379,7 +357,11 @@ def run(target,
 
 
 def dispatch(*args, **kwargs):
-    """Parse TF_CONFIG to cluster_spec and call run() method
+    """"Parse TF_CONFIG to cluster_spec and call run() method
+
+    This method is needed to start the job on a number of managed
+    cluster workers. Furthermore, it also adds the PS which handle
+    the variables.
     """
     tf.logging.info('Setting up the server')
     tf_config = os.environ.get('TF_CONFIG')
@@ -389,6 +371,7 @@ def dispatch(*args, **kwargs):
         return run('', None, True, *args, **kwargs)
 
     tf_config_json = json.loads(tf_config)
+    tf.logging.info('CONFIG: {}'.format(tf_config_json))
 
     cluster = tf_config_json.get('cluster')
     job_name = tf_config_json.get('task', {}).get('type')
@@ -491,10 +474,6 @@ if __name__ == "__main__":
                         default=50,
                         help='Number of tags to be used as an output')
 
-    parser.add_argument('--selective-tags',
-                        type=str,
-                        help='Path to selective tag file')
-
     parser.add_argument('--num-song-samples',
                         type=int,
                         default=-1,
@@ -505,13 +484,10 @@ if __name__ == "__main__":
 
     parser.add_argument('--windowing-type',
                         type=str,
-                        default=None,
+                        default='SPM',
                         help="""\
-                            The type of windowing to be used by the function.
-                            None: No windowing.
-                            stme: Seperate training and merged evaluation.
-                            spm: Super-pooled output layer model
-                            """)
+                        Windowing type for the model between SPM and STME.
+                        """)
 
     parse_args, unknown = parser.parse_known_args()
 
