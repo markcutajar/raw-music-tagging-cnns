@@ -17,21 +17,20 @@ Package dependencies:
 5. ffmpeg
 6. python_speech_features
 
-Files and folder description:
+<br>Files and folder description:
 <ul>
-<li>**cloud**: Contains all the run scripts. Each test has a bash run script depen_ding on the test. Some tests have both _mgpu_ runscripts which run the test on GPUs instead a cluster of CPUs. Others also have a _restore_ file to continue run from previous checkpoint keeping the same google storage save directory as before.</li>
-<li>**cloud/trainer**: Contains all the python files for running the tests.</li>
+<li>cloud: Contains all the run scripts. Each test has a bash run script depen_ding on the test. Some tests have both _mgpu_ runscripts which run the test on GPUs instead a cluster of CPUs. Others also have a _restore_ file to continue run from previous checkpoint keeping the same google storage save directory as before.</li>
+<li>cloud/trainer: Contains all the python files for running the tests.</li>
+<li>cloud/trainer/models.py or models_mgpu.py**: The python files with the models being run for both GPU setup and cluster setup. </li>
+<li>cloud/trainer/task.py or task_mgpu.py**: The training python scripts to create the cluster and setup the servers, train, handle checkpoints, summaries and evaluation.</li>
+<li>notebooks: Folder with some preliminary testing scripts when setting up the framework.</li>
+<li>pydst: Folder with scripts of extracting the dataset and saving as records.</li>
+<li>pydst/extract_ds_tfr.py: Extract file and save raw format in tfrecord.</li>
+<li>pydst/extract_ds_fbanks_tfr.py: Extract file and save fbanks format in tfrecord.</li>
+<li>pydst/extract_dsw_tfr.py: Extract file and save windowed raw format in tfrecord.</li>
+<li>pydst/extract_dsw_fbanks_tfr.py: Extract file and save windowed fbanks format in tfrecord.</li>
+<li>testInfo_and_results.xlsx: All the results and models used in the this research.</li>
 </ul>
-<br>**cloud/trainer/models.py or models_mgpu.py**: The python files with the models being run for both GPU setup and cluster setup. 
-<br>**cloud/trainer/task.py or task_mgpu.py**: The training python scripts to create the cluster and setup the servers, train, handle checkpoints, summaries and evaluation.
-<br>**notebooks**: Folder with some preliminary testing scripts when setting up the framework.
-<br>**pydst**: Folder with scripts of extracting the dataset and saving as records.
-<br>**pydst/extract_ds_tfr.py**: Extract file and save raw format in tfrecord.
-<br>**pydst/extract_ds_fbanks_tfr.py**: Extract file and save fbanks format in tfrecord.
-<br>**pydst/extract_dsw_tfr.py**: Extract file and save windowed raw format in tfrecord.
-<br>**pydst/extract_dsw_fbanks_tfr.py**: Extract file and save windowed fbanks format in tfrecord.
-<br>
-<br>**testInfo_and_results.xlsx**: All the results and models used in the this research
 <br><br>
 ### Research proposal abstract
 
