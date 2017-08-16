@@ -30,8 +30,6 @@ Files and folder description:
 <br>**pydst/extract_dsw_fbanks_tfr.py**: Extract file and save windowed fbanks format in tfrecord.
 <br>
 <br>**testInfo_and_results.xlsx**: All the results and models used in the this research
-
-Package with all the functions called pydst.
 <br><br>
 ### Research proposal abstract
 
