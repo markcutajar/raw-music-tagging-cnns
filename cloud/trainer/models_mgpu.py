@@ -6,7 +6,7 @@ TRAIN, EVAL, PREDICT = 'TRAIN', 'EVAL', 'PREDICT'
 STME, SPM = 'STME', 'SPM'
 
 TRUE_POSITIVE_FACTOR = 10
-TAG_BALANCING_FACTOR = 0
+TAG_BALANCING_FACTOR = 10
 # ---------------------------------------------------------------------------------------------------------------------
 # Controller
 # ---------------------------------------------------------------------------------------------------------------------
@@ -287,6 +287,19 @@ def conv_layers_1d(in_layer,
                                         activation_fn=tf.nn.elu,
                                         normalizer_fn=tf.contrib.layers.batch_norm)
 
+def max_1d(in_layer,
+           pool_length,
+           pool_stride,
+           pool_name):
+    return tf.contrib.layers.max_pool2d(in_layer, [1, pool_length], stride=[1, pool_stride], scope=pool_name)
+
+def avg_1d(in_layer,
+           pool_length,
+           pool_stride,
+           pool_name):
+    return tf.contrib.layers.avg_pool2d(in_layer, [1, pool_length], stride=[1, pool_stride], scope=pool_name)
+
+
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Super pooling models
@@ -350,13 +363,13 @@ def mkc_r(data_batch, mode):
     name = 'CL1'
     with tf.variable_scope(name):
         output = tf.layers.conv1d(data_batch, 4, 16, strides=16, activation=None,  name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)#(mode==TRAIN))
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'CL2'
     with tf.variable_scope(name):
         output = tf.layers.conv1d(outputs['CL1'], 8, 8, strides=4, activation=None, name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)#(mode==TRAIN))
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'MP1'
@@ -365,50 +378,7 @@ def mkc_r(data_batch, mode):
     name = 'CL3'
     with tf.variable_scope(name):
         output = tf.layers.conv1d(outputs['MP1'], 12, 4, strides=1, activation=None, name='conv')
-        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)#(mode==TRAIN))
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    name = 'MP2'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL3'], pool_size=2, strides=2, name=name)
-
-    name = 'FLTN'
-    outputs[name] = tf.reshape(outputs['MP2'], [int(outputs['MP2'].shape[0]), -1], name=name)
-
-    name = 'FCL1'
-    outputs[name] = tf.layers.dense(outputs['FLTN'], 1000, activation=tf.nn.elu, name=name)
-
-    name = 'FCL2'
-    outputs[name] = tf.layers.dense(outputs['FCL1'], 300, activation=tf.nn.elu, name=name)
-
-    name = 'FCL3'
-    outputs[name] = tf.layers.dense(outputs['FCL2'], output_size, activation=tf.identity, name=name)
-    return outputs[name]
-
-
-# Basic CNN for windowed raw data
-# with batch normalization.
-def mkc_rw(data_batch, mode):
-    output_size=50
-    outputs = {}
-    name = 'CL1'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(data_batch, 4, 64, strides=4, activation=None,  name='conv')
-        #output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    name = 'CL2'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['CL1'], 8, 8, strides=2, activation=None, name='conv')
-        #output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
-        outputs[name] = tf.nn.elu(output, name='nonLin')
-
-    name = 'MP1'
-    outputs[name] = tf.layers.max_pooling1d(outputs['CL2'], pool_size=2, strides=2, name=name)
-
-    name = 'CL3'
-    with tf.variable_scope(name):
-        output = tf.layers.conv1d(outputs['MP1'], 12, 4, strides=1, activation=None, name='conv')
-        #output = tf.layers.batch_normalization(output, name='batchNorm', training=(mode==TRAIN))
+        output = tf.layers.batch_normalization(output, name='batchNorm', training=True)
         outputs[name] = tf.nn.elu(output, name='nonLin')
 
     name = 'MP2'
@@ -936,7 +906,7 @@ def dl16_4_ra(data_batch, mode):
 def mul16a(data_batch, mode):
 
     data = tf.expand_dims(data_batch, axis=1)
-    out_l1 = conv_layers_1d(data, 32, 16, 16, 'CL1')  # 2427
+    out_l1 = conv_layers_1d(data, 64, 16, 16, 'CL1')  # 2427
 
     out_l2a = conv_max_layers_1d(out_l1, 32, 4, 1, 'CL2a', 4, 4, 'MP1a')  # 606
     out_l2b = conv_avg_layers_1d(out_l1, 32, 16, 1, 'CL2b', 4, 4, 'MP1b')  # 606
@@ -1053,6 +1023,72 @@ def mul16d(data_batch, mode):
     out_l4 = conv_max_layers_1d(out_l3, 128, 4, 1, 'CL4', 4, 4, 'MP3')  # 39
     out_l5 = conv_max_layers_1d(out_l4, 256, 4, 1, 'CL5', 4, 4, 'MP4')  # 9
     out_l6 = conv_max_layers_1d(out_l5, 256, 4, 1, 'CL6', 4, 4, 'MP5')  # 2
+    out_l7 = conv_max_layers_1d(out_l6, 512, 4, 1, 'CL7', 2, 2, 'MP6')  # 1
+
+    out_drop = tf.contrib.layers.dropout(out_l7)
+    out_fltn = tf.reshape(out_drop, [int(out_drop.shape[0]), -1], name='FLTN')
+    out_fcl = tf.layers.dense(out_fltn, 50, activation=tf.nn.sigmoid, name='FCL')
+    return out_fcl
+
+
+# Deeper Model similar to proposed by Lee et al.
+# Raw data
+# Output: 50 Neurons
+# Structure: 7 Conv, 1 MLP
+def mul16ds(data_batch, mode):
+
+    data = tf.expand_dims(data_batch, axis=1)
+    out_l1a = conv_layers_1d(data, 32, 16, 16, 'CL1a')
+    out_l1b = conv_layers_1d(data, 64, 64, 16, 'CL1b')
+    out_l1 = tf.concat([out_l1a, out_l1b], axis=-1)
+
+    out_l2 = conv_max_layers_1d(out_l1, 64, 4, 1, 'CL2', 4, 4, 'MP1')
+    out_l3 = conv_max_layers_1d(out_l2, 128, 4, 1, 'CL3', 4, 4, 'MP2')
+    out_l4 = conv_max_layers_1d(out_l3, 128, 4, 1, 'CL4', 4, 4, 'MP3')
+    out_l5 = conv_max_layers_1d(out_l4, 256, 4, 1, 'CL5', 4, 4, 'MP4')
+    out_l6 = conv_max_layers_1d(out_l5, 256, 4, 1, 'CL6', 4, 4, 'MP5')
+    out_l7 = conv_max_layers_1d(out_l6, 512, 4, 1, 'CL7', 2, 2, 'MP6')
+
+    out_drop = tf.contrib.layers.dropout(out_l7)
+    out_fltn = tf.reshape(out_drop, [int(out_drop.shape[0]), -1], name='FLTN')
+    out_fcl = tf.layers.dense(out_fltn, 50, activation=tf.nn.sigmoid, name='FCL')
+    return out_fcl
+
+
+# Deeper Model similar to proposed by Lee et al.
+# Raw data
+# Output: 50 Neurons
+# Structure: 7 Conv, 1 MLP
+def mul16f(data_batch, mode):
+
+    data = tf.expand_dims(data_batch, axis=1)
+    out_l1 = conv_layers_1d(data, 64, 16, 16, 'CL1')
+
+    out_l2aa = conv_layers_1d(out_l1, 32, 4, 1, 'CL2aa')  # 606
+    out_l2ab = conv_max_layers_1d(out_l2aa, 32, 4, 1, 'CL2ab', 4, 4, 'MP1')  # 606
+    out_l2b = avg_1d(out_l1, 4, 4, 'AVG1')
+    out_l2 = tf.concat([out_l2ab, out_l2b], axis=-1)
+
+    out_l3aa = conv_layers_1d(out_l2, 32, 4, 1, 'CL3aa')  # 151
+    out_l3ab = conv_max_layers_1d(out_l3aa, 32, 4, 1, 'CL3ab', 4, 4, 'MP2')  # 151
+    out_l3b = avg_1d(out_l2, 4, 4, 'AVG2')
+    out_l3 = tf.concat([out_l3ab, out_l3b], axis=-1)
+
+    out_l4aa = conv_layers_1d(out_l3, 32, 4, 1, 'CL4aa')  # 151
+    out_l4ab = conv_max_layers_1d(out_l4aa, 32, 4, 1, 'CL4ab', 4, 4, 'MP3')  # 39
+    out_l4b = avg_1d(out_l3, 4, 4, 'AVG3')
+    out_l4 = tf.concat([out_l4ab, out_l4b], axis=-1)
+
+    out_l5aa = conv_layers_1d(out_l4, 64, 4, 1, 'CL5aa')  # 151
+    out_l5ab = conv_max_layers_1d(out_l5aa, 64, 4, 1, 'CL5ab', 4, 4, 'MP4')  # 9
+    out_l5b = avg_1d(out_l4, 4, 4, 'AVG4')
+    out_l5 = tf.concat([out_l5ab, out_l5b], axis=-1)
+
+    out_l6aa = conv_layers_1d(out_l5, 64, 4, 1, 'CL6aa')  # 151
+    out_l6ab = conv_max_layers_1d(out_l6aa, 64, 4, 1, 'CL6ab', 4, 4, 'MP5')  # 2
+    out_l6b = avg_1d(out_l5, 4, 4, 'AVG5')
+    out_l6 = tf.concat([out_l6ab, out_l6b], axis=-1)
+
     out_l7 = conv_max_layers_1d(out_l6, 512, 4, 1, 'CL7', 2, 2, 'MP6')  # 1
 
     out_drop = tf.contrib.layers.dropout(out_l7)
