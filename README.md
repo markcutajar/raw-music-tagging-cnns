@@ -18,8 +18,10 @@ Package dependencies:
 6. python_speech_features
 
 Files and folder description:
-<br>**cloud**: Contains all the run scripts. Each test has a bash run script depen_ding on the test. Some tests have both _mgpu_ runscripts which run the test on GPUs instead a cluster of CPUs. Others also have a _restore_ file to continue run from previous checkpoint keeping the same google storage save directory as before.
-<br>**cloud/trainer**: Contains all the python files for running the tests.
+<ul>
+<li>**cloud**: Contains all the run scripts. Each test has a bash run script depen_ding on the test. Some tests have both _mgpu_ runscripts which run the test on GPUs instead a cluster of CPUs. Others also have a _restore_ file to continue run from previous checkpoint keeping the same google storage save directory as before.</li>
+<li>**cloud/trainer**: Contains all the python files for running the tests.</li>
+</ul>
 <br>**cloud/trainer/models.py or models_mgpu.py**: The python files with the models being run for both GPU setup and cluster setup. 
 <br>**cloud/trainer/task.py or task_mgpu.py**: The training python scripts to create the cluster and setup the servers, train, handle checkpoints, summaries and evaluation.
 <br>**notebooks**: Folder with some preliminary testing scripts when setting up the framework.
