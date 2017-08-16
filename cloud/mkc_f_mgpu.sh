@@ -1,17 +1,17 @@
-TEST_SCRIPT_NAME=ds256ra_01
-MODEL=ds256ra
+TEST_SCRIPT_NAME=mkc_f
+MODEL=mkc_f
 
 current_date=$(date +%m%d_%H%M)
 JOB_NAME=${TEST_SCRIPT_NAME}_${current_date}
 JOB_DIR=gs://magnatagatune_dataset/out_$JOB_NAME
-TRAIN_FILE=gs://magnatagatune_dataset/train_rawdata.tfrecords
-EVAL_FILE=gs://magnatagatune_dataset/valid_rawdata.tfrecords
-METADATA_FILE=gs://magnatagatune_dataset/raw_metadata.json
+
+TRAIN_FILE=gs://magnatagatune_dataset/train_fbanksdata.tfrecords
+EVAL_FILE=gs://magnatagatune_dataset/valid_fbanksdata.tfrecords
+METADATA_FILE=gs://magnatagatune_dataset/fbank40_metadata.json
 
 TRAIN_STEPS=20000
 LEARNING_RATE=0.1
 EVAL_STEPS=106
-
 EVAL_BATCH=5
 TRAIN_BATCH=5
 
