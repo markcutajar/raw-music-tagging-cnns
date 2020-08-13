@@ -3,10 +3,10 @@ import pylast
 from pydst.rate_limiters import RateLimited
 
 def setAPI_Connection():
-    API_KEY = "cb0650874801a71bc31d503abffe18ee"
-    API_SECRET = "90502a82e6332acb7614b6391bbff9b3"
+    API_KEY = ""
+    API_SECRET = ""
     username = "MarkCutajar"
-    password_hash = pylast.md5("lFM&data0")
+    password_hash = pylast.md5("")
 
     network = pylast.LastFMNetwork(api_key=API_KEY, api_secret=API_SECRET,
                                    username=username, password_hash=password_hash)
